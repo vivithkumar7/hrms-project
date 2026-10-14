@@ -1,0 +1,14 @@
+{
+  "info": {"name":"HRMS API","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable":[{"key":"baseUrl","value":"http://localhost:8000"},{"key":"token","value":""},{"key":"adminEmail","value":"admin@example.com"},{"key":"adminPassword","value":""}],
+  "item":[
+    {"name":"Health","request":{"method":"GET","url":"{{baseUrl}}/api/health"}},
+    {"name":"Login","event":[{"listen":"test","script":{"exec":["if (pm.response.code === 200) { pm.collectionVariables.set('token', pm.response.json().access_token); }"]}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}"},"url":"{{baseUrl}}/api/auth/login"}},
+    {"name":"Current user","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":"{{baseUrl}}/api/auth/me"}},
+    {"name":"Dashboard summary","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":"{{baseUrl}}/api/dashboard/summary"}},
+    {"name":"List employees","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":"{{baseUrl}}/api/employees"}},
+    {"name":"Generate payroll","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"year\":2026,\"month\":10}"},"url":"{{baseUrl}}/api/payroll/generate"}}
+    ,{"name":"Audit logs (read-only, admin)","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/audit-logs?limit=100&offset=0","host":["{{baseUrl}}"],"path":["api","audit-logs"],"query":[{"key":"limit","value":"100"},{"key":"offset","value":"0"}]}}}
+    ,{"name":"Attendance report PDF","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/reports/attendance.pdf?start_date=2026-10-01&end_date=2026-10-31","host":["{{baseUrl}}"],"path":["api","reports","attendance.pdf"],"query":[{"key":"start_date","value":"2026-10-01"},{"key":"end_date","value":"2026-10-31"}]}}}
+  ]
+}

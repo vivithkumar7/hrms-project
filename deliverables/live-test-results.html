@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Big Stack HRMS live test report</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#faf4fc,#fff8f3);color:#281c31;font:16px 'Segoe UI',Arial,sans-serif}
+main{max-width:1020px;margin:56px auto;padding:0 28px}.brand{display:flex;align-items:center;gap:13px;color:#6e367d;font-weight:750;letter-spacing:.02em}
+.mark{display:grid;place-items:center;width:46px;height:46px;border-radius:15px;background:linear-gradient(140deg,#fa9275,#ef6483 55%,#9465d0);color:white;font-size:23px}
+h1{margin:35px 0 8px;font-size:36px;letter-spacing:-.04em}.sub{color:#786d7e}.overall{display:inline-block;margin:25px 0;padding:9px 16px;border-radius:20px;background:#e8f5ed;color:#14785b;font-size:13px;font-weight:800;letter-spacing:.1em}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:17px}.card{min-height:170px;padding:22px;border:1px solid #eee4f0;border-radius:18px;background:#fff;box-shadow:0 12px 35px #41204f0b}
+.card h2{margin:0 0 15px;font-size:15px}.status{font-size:11px;font-weight:800;letter-spacing:.1em;color:#14785b}.detail{margin-top:13px;color:#655a6d;font-size:14px;line-height:1.65}
+.note{margin-top:23px;padding:15px 18px;border:1px solid #f0dfcf;border-radius:13px;background:#fff8ef;color:#775137;font-size:13px}
+@media(max-width:760px){main{margin:24px auto;padding:0 17px}.grid{grid-template-columns:1fr}h1{font-size:29px}}
+</style>
+</head>
+<body><main>
+<div class="brand"><span class="mark">B</span><span>Big Stack People | Quality check</span></div>
+<h1>Live system test report</h1>
+<p class="sub">Generated 2026-10-14T13:25:12.0803381+05:30. Full backend workflow suite, production frontend build, and live API documentation check.</p>
+<div class="overall" style="color:#14785b">OVERALL PASS</div>
+<section class="grid">
+<article class="card"><h2>Backend workflows</h2><div class="status">PASS</div><div class="detail">15 passed, 1 warning in 10.79s</div><div class="detail">Authentication | employees | attendance | leave | payroll | reports | audit | notifications | OpenAPI</div></article>
+<article class="card"><h2>Frontend production build</h2><div class="status">PASS</div><div class="detail">✓ built in 3.60s</div><div class="detail">Vite production bundle completed.</div></article>
+<article class="card"><h2>Live API &amp; Swagger</h2><div class="status">PASS</div><div class="detail">Health: ok<br>Swagger UI: HTTP 200<br>ReDoc: HTTP 200<br>OpenAPI operations: 46<br>Bearer-protected: 41</div></article>
+</section>
+<div class="note">Test records were created in a disposable SQLite database. The configured HRMS database and its employee/payroll data were not modified.</div>
+</main></body></html>
