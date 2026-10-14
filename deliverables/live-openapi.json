@@ -471,6 +471,31 @@
                                                                    }
                                                  }
                                      },
+                  "/api/employees/directory":  {
+                                                   "get":  {
+                                                               "summary":  "Employee Directory",
+                                                               "operationId":  "employee_directory_api_employees_directory_get",
+                                                               "responses":  {
+                                                                                 "200":  {
+                                                                                             "description":  "Successful Response",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         }
+                                                                             },
+                                                               "security":  [
+                                                                                {
+                                                                                    "OAuth2PasswordBearer":  [
+
+                                                                                                             ]
+                                                                                }
+                                                                            ]
+                                                           }
+                                               },
                   "/api/departments":  {
                                            "get":  {
                                                        "summary":  "List Departments",
@@ -1976,6 +2001,88 @@
                                                                                              }
                                                                            }
                                                                },
+                  "/api/reports/{report_name}/data":  {
+                                                          "get":  {
+                                                                      "summary":  "Report Data Route",
+                                                                      "operationId":  "report_data_route_api_reports__report_name__data_get",
+                                                                      "security":  [
+                                                                                       {
+                                                                                           "OAuth2PasswordBearer":  [
+
+                                                                                                                    ]
+                                                                                       }
+                                                                                   ],
+                                                                      "parameters":  [
+                                                                                         {
+                                                                                             "name":  "report_name",
+                                                                                             "in":  "path",
+                                                                                             "required":  true,
+                                                                                             "schema":  {
+                                                                                                            "type":  "string",
+                                                                                                            "title":  "Report Name"
+                                                                                                        }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "start_date",
+                                                                                             "in":  "query",
+                                                                                             "required":  true,
+                                                                                             "schema":  {
+                                                                                                            "type":  "string",
+                                                                                                            "format":  "date",
+                                                                                                            "title":  "Start Date"
+                                                                                                        }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "end_date",
+                                                                                             "in":  "query",
+                                                                                             "required":  true,
+                                                                                             "schema":  {
+                                                                                                            "type":  "string",
+                                                                                                            "format":  "date",
+                                                                                                            "title":  "End Date"
+                                                                                                        }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "department_id",
+                                                                                             "in":  "query",
+                                                                                             "required":  false,
+                                                                                             "schema":  {
+                                                                                                            "anyOf":  [
+                                                                                                                          {
+                                                                                                                              "type":  "integer"
+                                                                                                                          },
+                                                                                                                          {
+                                                                                                                              "type":  "null"
+                                                                                                                          }
+                                                                                                                      ],
+                                                                                                            "title":  "Department Id"
+                                                                                                        }
+                                                                                         }
+                                                                                     ],
+                                                                      "responses":  {
+                                                                                        "200":  {
+                                                                                                    "description":  "Successful Response",
+                                                                                                    "content":  {
+                                                                                                                    "application/json":  {
+                                                                                                                                             "schema":  {
+
+                                                                                                                                                        }
+                                                                                                                                         }
+                                                                                                                }
+                                                                                                },
+                                                                                        "422":  {
+                                                                                                    "description":  "Validation Error",
+                                                                                                    "content":  {
+                                                                                                                    "application/json":  {
+                                                                                                                                             "schema":  {
+                                                                                                                                                            "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                        }
+                                                                                                                                         }
+                                                                                                                }
+                                                                                                }
+                                                                                    }
+                                                                  }
+                                                      },
                   "/api/audit-logs":  {
                                           "get":  {
                                                       "summary":  "Audit Logs",

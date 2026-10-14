@@ -2,7 +2,7 @@
 
 React + FastAPI + SQLAlchemy (SQLite for local development; MySQL is supported for deployment)
 
-An HR management system with role-aware dashboards, employee onboarding, attendance, leave, payroll, reporting, and audit capabilities. See the [dashboard redesign guide](deliverables/HRMS-Redesign-Guide.pdf) for feature descriptions, screenshots, and run instructions. After backend dependencies are installed, regenerate it from the project root with `.\backend\.venv\Scripts\python.exe deliverables\generate_redesign_guide.py`.
+An HR management system with role-aware dashboards, employee onboarding, attendance, leave, payroll, reporting, and audit capabilities. See the [10-page HRMS project report](deliverables/HRMS-Project-Report.pdf) for module walkthroughs, local UI screenshots, API coverage, validation results, and setup instructions. Regenerate it from the project root with `.\backend\.venv\Scripts\python.exe deliverables\generate_hrms_project_report.py`. The [dashboard redesign guide](deliverables/HRMS-Redesign-Guide.pdf) is also available.
 
 ## Environment variables
 
