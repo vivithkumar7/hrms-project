@@ -1,6 +1,6 @@
 from datetime import datetime, date, timezone
 from decimal import Decimal
-from sqlalchemy import String, Integer, Date, DateTime, Boolean, ForeignKey, Numeric, Text, UniqueConstraint, Index
+from sqlalchemy import String, Integer, Date, DateTime, Boolean, ForeignKey, Numeric, Text, Time, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -76,12 +76,20 @@ class Attendance(Base):
     check_out: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     working_minutes: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="present")
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id"), nullable=True, index=True)
+    late_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    early_checkout_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    overtime_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    shift: Mapped["Shift | None"] = relationship()
 
 class Holiday(Base):
     __tablename__ = "holidays"
     id: Mapped[int] = mapped_column(primary_key=True)
-    holiday_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    holiday_date: Mapped[date] = mapped_column(Date, index=True)
     name: Mapped[str] = mapped_column(String(120))
+    scope: Mapped[str] = mapped_column(String(20), default="company")
+    department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
+    is_optional: Mapped[bool] = mapped_column(Boolean, default=False)
 
 class LeaveType(Base):
     __tablename__ = "leave_types"
@@ -133,6 +141,10 @@ class Payroll(Base):
     lop_days: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=0)
     lop_deduction: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     other_deductions: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    overtime_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    overtime_pay: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    earnings_breakdown: Mapped[dict] = mapped_column(JSON, default=dict)
+    deductions_breakdown: Mapped[dict] = mapped_column(JSON, default=dict)
     net_salary: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     locked: Mapped[bool] = mapped_column(Boolean, default=True)
     simulated_credited: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -170,3 +182,92 @@ class AuditLog(Base):
     entity_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class InAppNotification(Base):
+    __tablename__ = "in_app_notifications"
+    __table_args__ = (Index("ix_in_app_notifications_user_created", "user_id", "created_at"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(100), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    message: Mapped[str] = mapped_column(Text)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "event_type", name="uq_notification_preference_user_event"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Shift(Base):
+    __tablename__ = "shifts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    shift_type: Mapped[str] = mapped_column(String(20), default="general")
+    start_time: Mapped[Time] = mapped_column(Time)
+    end_time: Mapped[Time] = mapped_column(Time)
+    grace_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    expected_minutes: Mapped[int] = mapped_column(Integer, default=480)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ShiftAssignment(Base):
+    __tablename__ = "shift_assignments"
+    __table_args__ = (
+        Index("ix_shift_assignments_employee_dates", "employee_id", "effective_from", "effective_to"),
+        Index("ix_shift_assignments_department_dates", "department_id", "effective_from", "effective_to"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shift_id: Mapped[int] = mapped_column(ForeignKey("shifts.id"), index=True)
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), nullable=True, index=True)
+    department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
+    effective_from: Mapped[date] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    assigned_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class SalaryComponent(Base):
+    __tablename__ = "salary_components"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    component_type: Mapped[str] = mapped_column(String(20))
+    is_variable: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class EmployeeSalaryComponent(Base):
+    __tablename__ = "employee_salary_components"
+    __table_args__ = (Index("ix_employee_salary_components_effective", "employee_id", "effective_from", "effective_to"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), index=True)
+    component_id: Mapped[int] = mapped_column(ForeignKey("salary_components.id"), index=True)
+    monthly_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    effective_from: Mapped[date] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    assigned_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class EmployeeCompensation(Base):
+    __tablename__ = "employee_compensation"
+    __table_args__ = (Index("ix_employee_compensation_effective", "employee_id", "effective_from", "effective_to"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), index=True)
+    monthly_salary: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    basic_salary: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    hra: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    special_allowance: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    pf_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    professional_tax: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    tds: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    effective_from: Mapped[date] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    assigned_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

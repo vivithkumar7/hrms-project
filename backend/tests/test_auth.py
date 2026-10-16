@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import uuid
 import zlib
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import smtplib
@@ -24,8 +24,8 @@ os.environ["CORS_ORIGINS"] = "http://testserver,http://localhost:5173,http://127
 os.environ["UPLOAD_DIR"] = str(_test_upload_path)
 
 from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.models import Attendance, AuditLog, AuthSession, Department, Employee, EmployeeDocument, Holiday, LeaveBalance, LeaveRequest, LeaveType, NotificationLog, Payroll, PayrollAdjustment, User
+from app.main import app, attendance_shift_metrics
+from app.models import Attendance, AuditLog, AuthSession, Department, Employee, EmployeeCompensation, EmployeeDocument, EmployeeSalaryComponent, Holiday, InAppNotification, LeaveBalance, LeaveRequest, LeaveType, NotificationLog, NotificationPreference, Payroll, PayrollAdjustment, SalaryComponent, Shift, ShiftAssignment, User
 from app.security import hash_password
 
 
@@ -34,6 +34,11 @@ def clean_database():
     with SessionLocal() as db:
         db.query(Attendance).delete()
         db.query(Holiday).delete()
+        db.query(InAppNotification).delete()
+        db.query(NotificationPreference).delete()
+        db.query(ShiftAssignment).delete()
+        db.query(EmployeeCompensation).delete()
+        db.query(EmployeeSalaryComponent).delete()
         db.query(EmployeeDocument).delete()
         db.query(LeaveRequest).delete()
         db.query(LeaveBalance).delete()
@@ -41,8 +46,11 @@ def clean_database():
         db.query(Payroll).delete()
         db.query(NotificationLog).delete()
         db.query(AuditLog).delete()
+        db.query(SalaryComponent).delete()
+        db.query(Shift).delete()
         db.query(LeaveType).delete()
         db.query(Employee).delete()
+        db.query(Department).delete()
         db.query(AuthSession).delete()
         db.query(User).delete()
         db.commit()
@@ -297,6 +305,25 @@ def test_swagger_ui_and_openapi_cover_all_api_routes(client):
     assert schema["paths"]["/api/audit-logs"]["get"]["security"] == [{auth_scheme: []}]
 
 
+def test_departments_can_be_created_for_dynamic_filters(client):
+    admin_headers = {"Authorization": f"Bearer {login_as(client, role='admin')}"}
+    hr_headers = {"Authorization": f"Bearer {login_as(client, role='hr')}"}
+    employee_headers = {"Authorization": f"Bearer {login_as(client, role='employee')}"}
+
+    created = client.post("/api/departments", json={"name": "  Customer Success  "}, headers=admin_headers)
+    assert created.status_code == 201
+    assert created.json()["name"] == "Customer Success"
+
+    duplicate = client.post("/api/departments", json={"name": "customer success"}, headers=hr_headers)
+    assert duplicate.status_code == 409
+    assert client.post("/api/departments", json={"name": "   "}, headers=admin_headers).status_code == 422
+    assert client.post("/api/departments", json={"name": "Restricted"}, headers=employee_headers).status_code == 403
+
+    listed = client.get("/api/departments", headers=employee_headers)
+    assert listed.status_code == 200
+    assert created.json() in listed.json()
+
+
 def test_employee_crud_and_document_access(client):
     admin_token = login_as(client, role="admin")
     headers = {"Authorization": f"Bearer {admin_token}"}
@@ -336,6 +363,32 @@ def test_employee_crud_and_document_access(client):
     details = client.get(f"/api/employees/{employee['id']}", headers=headers)
     assert details.status_code == 200
     assert details.json()["emergency_contact_phone"] == "+1 555 0101"
+
+    employee_login = client.post(
+        "/api/auth/login",
+        json={"email": payload["email"], "password": payload["temporary_password"]},
+    )
+    employee_headers = {"Authorization": f"******"}
+    assert employee_login.status_code == 200, employee_login.text
+    employee_headers = {"Authorization": "Bearer " + employee_login.json()["access_token"]}
+    self_update = client.patch(
+        "/api/employees/me/profile",
+        json={
+            "phone": "  +1 555 0199  ",
+            "address": "  19 New Street  ",
+            "emergency_contact_name": "  Casey Employee  ",
+        },
+        headers=employee_headers,
+    )
+    assert self_update.status_code == 200, self_update.text
+    assert self_update.json()["phone"] == "+1 555 0199"
+    assert self_update.json()["address"] == "19 New Street"
+    assert self_update.json()["emergency_contact_name"] == "Casey Employee"
+    assert client.patch(
+        "/api/employees/me/profile",
+        json={"monthly_salary": "1.00"},
+        headers=employee_headers,
+    ).status_code == 422
 
     invalid = client.post("/api/employees", json={**payload, "email": f"{uuid.uuid4().hex}@example.com", "employee_code": f"E-{uuid.uuid4().hex[:8]}", "monthly_salary": "-1"}, headers=headers)
     assert invalid.status_code == 422
@@ -402,6 +455,7 @@ def test_employee_crud_and_document_access(client):
         "designation": "Senior Analyst",
         "role": "employee",
         "is_active": True,
+        "is_self": True,
     }
     assert client.get(f"/api/employees/{employee['id']}/documents", headers=employee_headers).status_code == 200
     assert client.get(f"/api/employees/{employee['id']}/documents/{docs.json()[0]['id']}", headers=employee_headers).status_code == 200
@@ -480,7 +534,7 @@ def test_attendance_check_in_out_summary_and_admin_correction(client):
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     hr_token = login_as(client, role="hr")
     hr_headers = {"Authorization": f"Bearer {hr_token}"}
-    check_in_time = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=3)
+    check_in_time = datetime.now(timezone.utc).replace(second=0, microsecond=0) - timedelta(hours=3)
     check_out_time = check_in_time + timedelta(hours=2)
     correction = client.patch(
         f"/api/attendance/{check_in.json()['id']}/correct",
@@ -490,6 +544,31 @@ def test_attendance_check_in_out_summary_and_admin_correction(client):
     assert correction.status_code == 200, correction.text
     assert correction.json()["status"] == "half_day"
     assert correction.json()["working_minutes"] == 120
+    shift_response = client.post(
+        "/api/shifts",
+        json={
+            "name": f"Correction {uuid.uuid4().hex[:6]}",
+            "shift_type": "flexible",
+            "start_time": check_in_time.strftime("%H:%M"),
+            "end_time": (check_in_time + timedelta(hours=1)).strftime("%H:%M"),
+            "expected_minutes": 60,
+        },
+        headers=admin_headers,
+    )
+    assert shift_response.status_code == 201, shift_response.text
+    shifted_correction = client.patch(
+        f"/api/attendance/{check_in.json()['id']}/correct",
+        json={
+            "shift_id": shift_response.json()["id"],
+            "status": "half_day",
+            "reason": "Assigned the correct schedule from the approved roster",
+        },
+        headers=admin_headers,
+    )
+    assert shifted_correction.status_code == 200, shifted_correction.text
+    assert shifted_correction.json()["shift_id"] == shift_response.json()["id"]
+    assert shifted_correction.json()["shift_name"] == shift_response.json()["name"]
+    assert shifted_correction.json()["overtime_minutes"] == 60
     assert client.get(f"/api/attendance/me?month={month}&year={year}", headers=employee_headers).json()["days_present"] == 0.5
     events = client.get("/api/audit-logs?action=attendance.check_in", headers=admin_headers)
     assert events.status_code == 200
@@ -633,7 +712,7 @@ def test_leave_approval_balance_lop_payroll_lock_and_credit_simulation(client):
     assert next(row for row in own_history.json() if row["id"] == rejected_leave_id)["status"] == "rejected"
     balances = client.get(f"/api/leaves/balances/me?year={today.year}", headers=employee_headers)
     assert balances.status_code == 200
-    assert balances.json()[0]["remaining_days"] == "0.00"
+    assert Decimal(balances.json()[0]["remaining_days"]) == Decimal("2.00") - Decimal(leave_response.json()["days"])
 
     payroll_end = today.replace(day=1) - timedelta(days=1)
     payroll_month_start = payroll_end.replace(day=1)
@@ -909,3 +988,352 @@ def test_notification_templates_record_success_and_failure(monkeypatch):
     with SessionLocal() as db:
         results = db.query(NotificationLog).order_by(NotificationLog.id).all()
         assert [row.status for row in results] == ["sent", "failed"]
+
+
+def create_department_employee():
+    with SessionLocal() as db:
+        department = Department(name=f"Phase Two {uuid.uuid4().hex[:8]}")
+        user = User(
+            email=f"{uuid.uuid4().hex}@example.com",
+            password_hash=hash_password("PhaseTwoSecurePassword123!"),
+            role="employee",
+        )
+        db.add_all([department, user])
+        db.flush()
+        employee = Employee(
+            user_id=user.id,
+            employee_code=f"P2-{uuid.uuid4().hex[:8]}",
+            full_name="Phase Two Employee",
+            department_id=department.id,
+            designation="Analyst",
+            joining_date=date.today(),
+            monthly_salary=Decimal("3600"),
+            basic_salary=Decimal("3000"),
+            hra=Decimal("500"),
+            special_allowance=Decimal("100"),
+        )
+        db.add(employee)
+        db.commit()
+        return employee.id, employee.user_id, department.id, user.email
+
+
+def test_holiday_scopes_calendar_visibility_and_attendance_summary(client):
+    admin_headers = {"Authorization": f"Bearer {login_as(client, 'admin')}"}
+    employee_id, user_id, department_id, email = create_department_employee()
+    employee_response = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "PhaseTwoSecurePassword123!"},
+    )
+    employee_headers = {"Authorization": f"Bearer {employee_response.json()['access_token']}"}
+    with SessionLocal() as db:
+        other_department = Department(name=f"Other Phase Two {uuid.uuid4().hex[:8]}")
+        db.add(other_department)
+        db.commit()
+        other_department_id = other_department.id
+
+    holiday_date = date.today()
+    common = {"holiday_date": holiday_date.isoformat()}
+    created = [
+        client.post("/api/holidays", json={**common, "name": "Company holiday"}, headers=admin_headers),
+        client.post("/api/holidays", json={**common, "name": "Regional holiday", "scope": "regional", "department_id": department_id}, headers=admin_headers),
+        client.post("/api/holidays", json={**common, "name": "Optional holiday", "scope": "optional"}, headers=admin_headers),
+        client.post("/api/holidays", json={**common, "name": "Other region", "scope": "regional", "department_id": other_department_id}, headers=admin_headers),
+    ]
+    assert [response.status_code for response in created] == [201, 201, 201, 201]
+    assert client.post("/api/holidays", json={**common, "name": "Duplicate company"}, headers=admin_headers).status_code == 409
+    assert client.post("/api/holidays", json={**common, "name": "Unauthorized"}, headers=employee_headers).status_code == 403
+
+    calendar = client.get(f"/api/holidays/calendar?year={holiday_date.year}", headers=employee_headers)
+    assert calendar.status_code == 200
+    assert {row["name"] for row in calendar.json()} == {"Company holiday", "Regional holiday", "Optional holiday"}
+    summary = client.get(
+        f"/api/attendance/me?month={holiday_date.month}&year={holiday_date.year}",
+        headers=employee_headers,
+    )
+    elapsed_end = min(holiday_date, holiday_date.replace(day=1) + timedelta(days=30))
+    expected_weekdays = sum(
+        (holiday_date.replace(day=1) + timedelta(days=offset)).weekday() < 5
+        for offset in range((elapsed_end - holiday_date.replace(day=1)).days + 1)
+    )
+    if holiday_date.weekday() < 5:
+        expected_weekdays -= 1
+    assert summary.status_code == 200
+    assert summary.json()["working_days"] == expected_weekdays
+    assert summary.json()["holiday_count"] == 1
+    assert len(summary.json()["holidays"]) == 3
+
+
+def test_shift_assignment_reports_and_scoped_in_app_broadcast(client):
+    admin_headers = {"Authorization": f"Bearer {login_as(client, 'admin')}"}
+    employee_id, user_id, department_id, email = create_department_employee()
+    employee_login = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "PhaseTwoSecurePassword123!"},
+    )
+    employee_headers = {"Authorization": f"Bearer {employee_login.json()['access_token']}"}
+    shift_response = client.post(
+        "/api/shifts",
+        json={
+            "name": f"Day {uuid.uuid4().hex[:6]}",
+            "shift_type": "general",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "grace_minutes": 10,
+            "expected_minutes": 480,
+        },
+        headers=admin_headers,
+    )
+    assert shift_response.status_code == 201, shift_response.text
+    shift = shift_response.json()
+    assignment = client.post(
+        "/api/shifts/assignments",
+        json={"shift_id": shift["id"], "department_id": department_id, "effective_from": date.today().isoformat()},
+        headers=admin_headers,
+    )
+    assert assignment.status_code == 201, assignment.text
+    next_shift_response = client.post(
+        "/api/shifts",
+        json={
+            "name": f"Night {uuid.uuid4().hex[:6]}",
+            "shift_type": "night",
+            "start_time": "22:00",
+            "end_time": "06:00",
+            "grace_minutes": 5,
+            "expected_minutes": 480,
+        },
+        headers=admin_headers,
+    )
+    assert next_shift_response.status_code == 201, next_shift_response.text
+    next_day = date.today() + timedelta(days=1)
+    reassignment = client.post(
+        "/api/shifts/assignments",
+        json={
+            "shift_id": next_shift_response.json()["id"],
+            "department_id": department_id,
+            "effective_from": next_day.isoformat(),
+        },
+        headers=admin_headers,
+    )
+    assert reassignment.status_code == 201, reassignment.text
+    history = client.get(
+        "/api/shifts/assignments",
+        params={"department_id": department_id, "include_history": True},
+        headers=admin_headers,
+    )
+    assert history.status_code == 200
+    prior_assignment = next(row for row in history.json() if row["id"] == assignment.json()["id"])
+    assert prior_assignment["effective_to"] == date.today().isoformat()
+    assert client.patch(
+        f"/api/shifts/{shift['id']}",
+        json={"is_active": False},
+        headers=admin_headers,
+    ).json()["is_active"] is False
+    assert client.patch(
+        f"/api/shifts/{shift['id']}",
+        json={"is_active": True},
+        headers=admin_headers,
+    ).json()["is_active"] is True
+    assert client.post("/api/shifts", json={
+        "name": "Forbidden shift", "shift_type": "general", "start_time": "09:00", "end_time": "17:00",
+    }, headers=employee_headers).status_code == 403
+    employee_assignments = client.get("/api/shifts/assignments", headers=employee_headers)
+    assert employee_assignments.status_code == 200
+    assert any(row["shift"]["id"] == shift["id"] for row in employee_assignments.json())
+
+    with SessionLocal() as db:
+        row = Attendance(
+            employee_id=employee_id,
+            work_date=date.today(),
+            working_minutes=510,
+            status="present",
+            shift_id=shift["id"],
+            late_minutes=15,
+            early_checkout_minutes=0,
+            overtime_minutes=30,
+        )
+        db.add(row)
+        db.commit()
+    report = client.get(
+        "/api/shifts/attendance",
+        params={"start_date": date.today().isoformat(), "end_date": date.today().isoformat(), "shift_id": shift["id"]},
+        headers=admin_headers,
+    )
+    assert report.status_code == 200
+    assert report.json()[0]["late_minutes"] == 15
+    assert report.json()[0]["overtime_minutes"] == 30
+
+    broadcast = client.post(
+        "/api/notifications/broadcast",
+        json={"title": "Team update", "message": "Department update.", "department_ids": [department_id]},
+        headers=admin_headers,
+    )
+    assert broadcast.status_code == 201
+    assert broadcast.json()["recipient_count"] == 1
+    employee_notifications = client.get("/api/notifications/me", headers=employee_headers)
+    assert employee_notifications.json()["unread_count"] == 1
+    notification_id = employee_notifications.json()["notifications"][0]["id"]
+    assert client.post(f"/api/notifications/me/{notification_id}/read", headers=employee_headers).json()["is_read"] is True
+    assert client.patch(
+        "/api/notifications/me/preferences",
+        json={"event_type": "admin_announcement", "enabled": False},
+        headers=employee_headers,
+    ).status_code == 200
+    client.post(
+        "/api/notifications/broadcast",
+        json={"title": "Second update", "message": "Should respect preferences.", "department_ids": [department_id]},
+        headers=admin_headers,
+    )
+    assert client.get("/api/notifications/me", headers=employee_headers).json()["unread_count"] == 0
+
+
+def test_overnight_shift_metrics_account_for_next_day_checkout():
+    shift = Shift(
+        name="Overnight metrics",
+        shift_type="night",
+        start_time=time(22, 0),
+        end_time=time(6, 0),
+        grace_minutes=10,
+        expected_minutes=480,
+    )
+    check_in = datetime(2026, 10, 14, 22, 15)
+    check_out = datetime(2026, 10, 15, 6, 30)
+    assert attendance_shift_metrics(shift, check_in, check_out) == (5, 0, 30)
+
+
+def test_payroll_includes_effective_salary_components_overtime_and_deductions(client):
+    admin_headers = {"Authorization": f"Bearer {login_as(client, 'admin')}"}
+    employee_id, user_id, department_id, email = create_department_employee()
+    previous_month_end = date.today().replace(day=1) - timedelta(days=1)
+    period_start = previous_month_end.replace(day=1)
+    with SessionLocal() as db:
+        employee = db.query(Employee).filter_by(id=employee_id).one()
+        employee.joining_date = period_start
+        db.commit()
+    base_revision = client.post(
+        f"/api/payroll/compensation/{employee_id}/base",
+        json={
+            "basic_salary": "4000.00",
+            "hra": "600.00",
+            "special_allowance": "200.00",
+            "pf_percentage": "2.00",
+            "professional_tax": "20.00",
+            "tds": "10.00",
+            "effective_from": period_start.isoformat(),
+        },
+        headers=admin_headers,
+    )
+    assert base_revision.status_code == 201, base_revision.text
+    earning = client.post(
+        "/api/payroll/components",
+        json={"name": f"Quarterly bonus {uuid.uuid4().hex[:6]}", "component_type": "earning", "is_variable": True},
+        headers=admin_headers,
+    )
+    deduction = client.post(
+        "/api/payroll/components",
+        json={"name": f"Insurance {uuid.uuid4().hex[:6]}", "component_type": "deduction"},
+        headers=admin_headers,
+    )
+    assert earning.status_code == 201
+    assert deduction.status_code == 201
+    for component, amount in ((earning.json(), "300.00"), (deduction.json(), "75.00")):
+        response = client.post(
+            f"/api/payroll/compensation/{employee_id}/components",
+            json={
+                "component_id": component["id"],
+                "monthly_amount": amount,
+                "effective_from": period_start.isoformat(),
+                "effective_to": previous_month_end.isoformat(),
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 201, response.text
+
+    with SessionLocal() as db:
+        weekday = next(
+            period_start + timedelta(days=offset)
+            for offset in range((previous_month_end - period_start).days + 1)
+            if (period_start + timedelta(days=offset)).weekday() < 5
+        )
+        db.add(Attendance(
+            employee_id=employee_id,
+            work_date=weekday,
+            check_in=datetime.combine(weekday, time(9, 0)),
+            check_out=datetime.combine(weekday, time(18, 0)),
+            working_minutes=540,
+            status="present",
+            overtime_minutes=60,
+        ))
+        db.commit()
+    generated = client.post(
+        "/api/payroll/generate",
+        json={"year": previous_month_end.year, "month": previous_month_end.month},
+        headers=admin_headers,
+    )
+    assert generated.status_code == 200, generated.text
+    payroll = next(row for row in generated.json()["payroll"] if row["employee_id"] == employee_id)
+    assert any(
+        name.startswith("Quarterly bonus") and amount == "300.00"
+        for name, amount in payroll["earnings_breakdown"].items()
+    )
+    assert any(name.startswith("Insurance") and amount == "75.00" for name, amount in payroll["deductions_breakdown"].items())
+    assert payroll["overtime_minutes"] == 60
+    assert Decimal(payroll["overtime_pay"]) > 0
+    assert payroll["basic_salary"] == "4000.00"
+    assert Decimal(payroll["gross_salary"]) == sum(
+        (Decimal(amount) for amount in payroll["earnings_breakdown"].values()),
+        Decimal("0"),
+    )
+    employee_login = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "PhaseTwoSecurePassword123!"},
+    )
+    employee_headers = {"Authorization": f"Bearer {employee_login.json()['access_token']}"}
+    history = client.get("/api/payroll/me", headers=employee_headers)
+    assert any(row["id"] == payroll["id"] for row in history.json())
+
+
+def test_base_compensation_revisions_preserve_salary_history_and_access(client):
+    admin_headers = {"Authorization": f"Bearer {login_as(client, 'admin')}"}
+    employee_id, user_id, department_id, email = create_department_employee()
+    with SessionLocal() as db:
+        employee = db.query(Employee).filter_by(id=employee_id).one()
+        employee.joining_date = date.today() - timedelta(days=90)
+        db.commit()
+
+    update_response = client.patch(
+        f"/api/employees/{employee_id}",
+        json={
+            "basic_salary": "3500.00",
+            "hra": "600.00",
+            "special_allowance": "200.00",
+            "pf_percentage": "2.00",
+        },
+        headers=admin_headers,
+    )
+    assert update_response.status_code == 200, update_response.text
+    history = client.get(
+        f"/api/payroll/compensation/{employee_id}/base",
+        headers=admin_headers,
+    )
+    assert history.status_code == 200
+    assert len(history.json()) == 2
+    current_revision, old_revision = history.json()
+    assert old_revision["monthly_salary"] == "3600.00"
+    assert old_revision["effective_to"] == (date.today() - timedelta(days=1)).isoformat()
+    assert current_revision["monthly_salary"] == "4300.00"
+    assert current_revision["effective_from"] == date.today().isoformat()
+
+    employee_login = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "PhaseTwoSecurePassword123!"},
+    )
+    employee_headers = {"Authorization": f"Bearer {employee_login.json()['access_token']}"}
+    own_history = client.get(
+        f"/api/payroll/compensation/{employee_id}/base",
+        headers=employee_headers,
+    )
+    assert own_history.status_code == 200
+    assert client.get(
+        f"/api/payroll/compensation/{employee_id + 1000}/base",
+        headers=employee_headers,
+    ).status_code == 404

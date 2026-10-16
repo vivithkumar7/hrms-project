@@ -31,6 +31,18 @@ class UserCreate(BaseModel):
     role: Literal["admin", "hr", "employee"] = "employee"
 class UserRoleUpdate(BaseModel):
     role: Literal["admin", "hr", "employee"]
+
+class DepartmentCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+    @field_validator("name")
+    @classmethod
+    def trim_department_name(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Department name must contain at least 2 non-whitespace characters")
+        return value
+
 class EmployeeCreate(BaseModel):
     email: EmailStr
     temporary_password: str = Field(min_length=10)
@@ -144,9 +156,47 @@ class EmployeeUpdate(BaseModel):
                 raise ValueError(f"{field_name} cannot be null")
         return self
 
+class EmployeeSelfProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    phone: str | None = Field(default=None, max_length=30)
+    date_of_birth: date | None = None
+    address: str | None = Field(default=None, max_length=2000)
+    emergency_contact_name: str | None = Field(default=None, max_length=160)
+    emergency_contact_relationship: str | None = Field(default=None, max_length=80)
+    emergency_contact_phone: str | None = Field(default=None, max_length=30)
+
+    @field_validator(
+        "phone",
+        "address",
+        "emergency_contact_name",
+        "emergency_contact_relationship",
+        "emergency_contact_phone",
+    )
+    @classmethod
+    def trim_optional_profile_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_profile_date_of_birth(cls, value: date | None) -> date | None:
+        if value is not None and value > date.today():
+            raise ValueError("Date of birth cannot be in the future")
+        return value
+
+    @model_validator(mode="after")
+    def require_profile_changes(self):
+        if not self.model_fields_set:
+            raise ValueError("Provide at least one profile field to update")
+        return self
+
 class AttendanceCorrection(BaseModel):
     check_in: datetime | None = None
     check_out: datetime | None = None
+    shift_id: int | None = Field(default=None, ge=1)
     status: str | None = Field(default=None, pattern="^(present|absent|half_day|on_leave)$")
     reason: str = Field(min_length=3, max_length=500)
 
@@ -215,6 +265,9 @@ class LeaveDecision(BaseModel):
 class HolidayCreate(BaseModel):
     holiday_date: date
     name: str = Field(min_length=2, max_length=120)
+    scope: Literal["company", "regional", "optional"] = "company"
+    department_id: int | None = Field(default=None, ge=1)
+    is_optional: bool = False
 
     @field_validator("name")
     @classmethod
@@ -223,5 +276,15 @@ class HolidayCreate(BaseModel):
         if len(value) < 2:
             raise ValueError("name must contain at least 2 non-whitespace characters")
         return value
+
+    @model_validator(mode="after")
+    def validate_scope(self):
+        if self.scope == "regional" and self.department_id is None:
+            raise ValueError("Regional holidays must be assigned to a department")
+        if self.scope == "company" and self.department_id is not None:
+            raise ValueError("Company-wide holidays cannot be assigned to a department")
+        if self.scope == "optional":
+            self.is_optional = True
+        return self
 class ConfiguredModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)

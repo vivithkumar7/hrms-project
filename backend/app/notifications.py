@@ -31,6 +31,10 @@ EMAIL_TEMPLATES: dict[str, tuple[str, str]] = {
         "Salary credit simulated for {period}",
         "A salary credit simulation was recorded for {period}. No funds were transferred.\n",
     ),
+    "attendance_alert": (
+        "Attendance alert",
+        "{message}\n",
+    ),
 }
 
 

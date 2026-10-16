@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, NavLink, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, restoreSession, setAccessToken } from './api';
+import { CompensationWorkspace, HolidayCalendar, NotificationsCenter, ShiftManagement } from './PhaseTwo';
 
 const currency = (value) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -145,6 +146,7 @@ function MetricCard({ label, value, tone, helper, icon, context }) {
 
 function AdminDashboardView({ summary, employees, departments, attendance, loading, error }) {
   const today = new Date();
+  const greeting = today.getHours() < 12 ? 'Good morning' : today.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const activeEmployees = employees.filter((person) => person.is_active);
   const checkedIn = Number(summary?.present_today || 0) + Number(summary?.half_day_today || 0);
   const presentCount = checkedIn;
@@ -189,7 +191,7 @@ function AdminDashboardView({ summary, employees, departments, attendance, loadi
   return (
     <div className="dashboard-page admin-dashboard redesigned-admin-dashboard">
       <header className="redesigned-dashboard-header">
-        <div><span className="redesigned-dashboard-date">{formattedDate}</span><h1>Good morning, team.</h1><p>Here’s what’s happening across your people today.</p></div>
+        <div><span className="redesigned-dashboard-date">{formattedDate}</span><h1>{greeting}, team.</h1><p>Here’s what’s happening across your people today.</p></div>
         <div className="redesigned-workspace-state"><i /><span>Workspace live</span><b>HR</b></div>
       </header>
 
@@ -393,6 +395,16 @@ function EmployeeDashboardView({ employee, attendance, leaveBalances, loading, e
   const totalRemaining = leaveBalances.reduce((total, balance) => total + Number(balance.remaining_days || 0), 0);
   const totalAllowance = leaveBalances.reduce((total, balance) => total + Number(balance.annual_allowance || 0), 0);
   const leavePercentage = totalAllowance ? Math.round((totalRemaining / totalAllowance) * 100) : 0;
+  const profileFields = [
+    employee?.phone,
+    employee?.date_of_birth,
+    employee?.address,
+    employee?.emergency_contact_name,
+    employee?.emergency_contact_relationship,
+    employee?.emergency_contact_phone,
+  ];
+  const completedProfileFields = profileFields.filter((value) => String(value || '').trim()).length;
+  const profileCompletion = Math.round((completedProfileFields / profileFields.length) * 100);
   const quickActions = [
     { title: 'View my profile', detail: 'Keep your details close', to: '/profile', icon: '♙', tone: 'action-blue' },
     { title: 'Manage time off', detail: 'Apply and track requests', to: '/leaves', icon: '◷', tone: 'action-amber' },
@@ -414,7 +426,7 @@ function EmployeeDashboardView({ employee, attendance, leaveBalances, loading, e
           <span>YOUR PEOPLE SPACE</span>
           <h2>A little progress<br />goes a long way.</h2>
           <p>Your workday, your people space. Everything in one place.</p>
-          <Link to="/profile">View your profile <b aria-hidden="true">→</b></Link>
+          <Link to="/profile">{profileCompletion < 100 ? 'Complete your profile' : 'View your profile'} <b aria-hidden="true">→</b></Link>
         </div>
         <div className="redesigned-attendance-ring" style={{ '--attendance-rate': `${loading ? 0 : leavePercentage}%` }} aria-label={`${loading ? 'Loading' : leavePercentage}% of leave allowance remains`}>
           <div><strong>{loading ? '—' : `${leavePercentage}%`}</strong><small>LEAVE LEFT</small></div>
@@ -432,6 +444,12 @@ function EmployeeDashboardView({ employee, attendance, leaveBalances, loading, e
           <p>Gross salary</p><strong>{loading ? '—' : currency(employee?.monthly_salary)}</strong>
           <small className="redesigned-metric-note">Before deductions</small>
         </article>
+        <Link className="redesigned-metric-card metric-accent-green employee-profile-metric" to="/profile">
+          <div className="redesigned-metric-top"><span>♙</span><small>PROFILE</small></div>
+          <p>Personal details</p><strong>{loading ? '—' : `${profileCompletion}% complete`}</strong>
+          <span className="employee-profile-progress"><i style={{ width: `${loading ? 0 : profileCompletion}%` }} /></span>
+          <small className="redesigned-metric-note">{loading ? 'Loading profile' : profileCompletion === 100 ? 'All personal details added' : `${profileFields.length - completedProfileFields} details still to add`}</small>
+        </Link>
       </section>
 
       <div className="redesigned-dashboard-panels">
@@ -1507,6 +1525,9 @@ function EmployeeDirectory() {
           ＋ Add employee
         </button>
       </header>
+      <p className="employee-directory-permission-note">
+        Only Admin and HR can edit or delete employee accounts. You can update your own details from My Profile.
+      </p>
       {error && <div className="dashboard-error" role="alert">{error}</div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {addEmployeeOpen && (
@@ -1568,7 +1589,7 @@ function EmployeeDirectory() {
       </section>
       <div className="table-responsive custom-table employee-directory-table employee-limited-directory-table">
         <table className="table">
-          <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Role</th><th>Status</th></tr></thead>
+          <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {filteredEmployees.map((employee) => (
               <tr key={employee.id}>
@@ -1578,10 +1599,11 @@ function EmployeeDirectory() {
                 <td>{employee.designation}</td>
                 <td><span className="employee-role-badge">{employee.role}</span></td>
                 <td><span className={`status-pill ${employee.is_active ? 'active' : 'inactive'}`}>{employee.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>{employee.is_self && <Link className="employee-directory-profile-link" to="/profile">Edit my profile</Link>}</td>
               </tr>
             ))}
             {!loading && !error && filteredEmployees.length === 0 && (
-              <tr><td className="employee-directory-empty" colSpan="6">{search ? 'No employees match your search.' : 'No employees are available in the directory yet.'}</td></tr>
+              <tr><td className="employee-directory-empty" colSpan="7">{search ? 'No employees match your search.' : 'No employees are available in the directory yet.'}</td></tr>
             )}
           </tbody>
         </table>
@@ -1652,6 +1674,7 @@ function Employees() {
   function startEdit(employee) {
     setEditing(employee.id);
     setFormOpen(true);
+    setError('');
     setForm({
       email: employee.email || '',
       role: employee.role || 'employee',
@@ -1724,12 +1747,12 @@ function Employees() {
   }
 
   async function deactivateEmployee(employee) {
-    if (!window.confirm(`Deactivate ${employee.full_name}? They will no longer be able to sign in.`)) return;
+    if (!window.confirm(`Delete ${employee.full_name}'s access? This deactivates their account and preserves their attendance and payroll history.`)) return;
     setError('');
     setNotice('');
     try {
       await api.delete(`/employees/${employee.id}`);
-      setNotice(`${employee.full_name} was deactivated.`);
+      setNotice(`${employee.full_name}'s account was deleted (deactivated); their records were retained.`);
       await loadEmployees();
     } catch (e) {
       setError(e.response?.data?.detail || 'Employee could not be deactivated.');
@@ -1895,7 +1918,7 @@ function Employees() {
                 <td><div className="employee-row-actions">
                   <Link to={`/employees/${e.id}`}>View details</Link>
                   <button type="button" onClick={() => startEdit(e)}>Edit</button>
-                  <button type="button" onClick={() => toggleEmployee(e)}>{e.is_active ? 'Deactivate' : 'Reactivate'}</button>
+                  <button className={e.is_active ? 'employee-delete-action' : ''} type="button" onClick={() => toggleEmployee(e)}>{e.is_active ? 'Delete' : 'Reactivate'}</button>
                   <label className="document-upload-button">Upload document<input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => { uploadDocument(e.id, event.target.files?.[0]); event.target.value = ''; }} /></label>
                   <button type="button" onClick={() => loadDocuments(e.id)}>Documents</button>
                 </div></td>
@@ -1993,6 +2016,16 @@ function EmployeeDetails() {
 function EmployeePage({ kind, role }) {
   const [data, setData] = useState(null);
   const [profileDocuments, setProfileDocuments] = useState([]);
+  const [profileForm, setProfileForm] = useState({
+    phone: '',
+    date_of_birth: '',
+    address: '',
+    emergency_contact_name: '',
+    emergency_contact_relationship: '',
+    emergency_contact_phone: '',
+  });
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [balances, setBalances] = useState([]);
   const [profile, setProfile] = useState(null);
   const [employeeRows, setEmployeeRows] = useState([]);
@@ -2008,9 +2041,8 @@ function EmployeePage({ kind, role }) {
   const [attendanceBusy, setAttendanceBusy] = useState(false);
   const [correction, setCorrection] = useState(null);
   const [correctionForm, setCorrectionForm] = useState(null);
+  const [attendanceShifts, setAttendanceShifts] = useState([]);
   const [holidayRows, setHolidayRows] = useState([]);
-  const [holidayForm, setHolidayForm] = useState({ holiday_date: '', name: '' });
-  const [holidayBusy, setHolidayBusy] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [leaveBalances, setLeaveBalances] = useState([]);
   const [leaveForm, setLeaveForm] = useState({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
@@ -2065,15 +2097,17 @@ function EmployeePage({ kind, role }) {
           const lastDay = new Date(attendanceYear, attendanceMonth, 0).getDate();
           const endDate = `${attendanceYear}-${String(attendanceMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
           if (isAdminAttendance) {
-            const [attendanceResult, employeesResult, holidayResult] = await Promise.all([
+            const [attendanceResult, employeesResult, holidayResult, shiftsResult] = await Promise.all([
               api.get('/attendance', { params: { start_date: startDate, end_date: endDate } }),
               api.get('/employees', { params: { include_inactive: true } }),
               api.get('/holidays', { params: { year: attendanceYear } }),
+              api.get('/shifts', { params: { include_inactive: true } }),
             ]);
             if (active) {
               setData(attendanceResult.data);
               setEmployeeRows(employeesResult.data);
               setHolidayRows(holidayResult.data);
+              setAttendanceShifts(shiftsResult.data);
             }
           } else {
             const [attendanceResult, profileResult] = await Promise.all([
@@ -2103,6 +2137,16 @@ function EmployeePage({ kind, role }) {
         const result = await api.get(paths[kind]);
         if (!active) return;
         setData(result.data);
+        if (kind === 'profile') {
+          setProfileForm({
+            phone: result.data.phone || '',
+            date_of_birth: result.data.date_of_birth || '',
+            address: result.data.address || '',
+            emergency_contact_name: result.data.emergency_contact_name || '',
+            emergency_contact_relationship: result.data.emergency_contact_relationship || '',
+            emergency_contact_phone: result.data.emergency_contact_phone || '',
+          });
+        }
         if (kind === 'profile' && role === 'employee') {
           const documentResult = await api.get(`/employees/${result.data.id}/documents`);
           if (active) setProfileDocuments(documentResult.data);
@@ -2162,6 +2206,31 @@ function EmployeePage({ kind, role }) {
     }
   }
 
+  async function saveProfile(event) {
+    event.preventDefault();
+    setProfileSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data: updatedProfile } = await api.patch('/employees/me/profile', {
+        ...profileForm,
+        date_of_birth: profileForm.date_of_birth || null,
+        phone: profileForm.phone.trim() || null,
+        address: profileForm.address.trim() || null,
+        emergency_contact_name: profileForm.emergency_contact_name.trim() || null,
+        emergency_contact_relationship: profileForm.emergency_contact_relationship.trim() || null,
+        emergency_contact_phone: profileForm.emergency_contact_phone.trim() || null,
+      });
+      setData(updatedProfile);
+      setProfileEditing(false);
+      setNotice('Your personal details have been saved.');
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Your profile could not be saved.');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function refreshAttendance() {
     if (isAdminAttendance) {
       const startDate = `${attendanceYear}-${String(attendanceMonth).padStart(2, '0')}-01`;
@@ -2198,7 +2267,13 @@ function EmployeePage({ kind, role }) {
       return dateValue.toISOString().slice(0, 16);
     };
     setCorrection(row);
-    setCorrectionForm({ check_in: toInput(row.check_in), check_out: toInput(row.check_out), status: row.status, reason: '' });
+    setCorrectionForm({
+      check_in: toInput(row.check_in),
+      check_out: toInput(row.check_out),
+      shift_id: row.shift_id ? String(row.shift_id) : '',
+      status: row.status,
+      reason: '',
+    });
   }
 
   async function saveCorrection(event) {
@@ -2212,6 +2287,7 @@ function EmployeePage({ kind, role }) {
       await api.patch(`/attendance/${correction.id}/correct`, {
         check_in: toUtc(correctionForm.check_in),
         check_out: toUtc(correctionForm.check_out),
+        shift_id: correctionForm.shift_id ? Number(correctionForm.shift_id) : null,
         status: correctionForm.status,
         reason: correctionForm.reason,
       });
@@ -2223,39 +2299,6 @@ function EmployeePage({ kind, role }) {
       setError(e.response?.data?.detail || 'Attendance correction could not be saved.');
     } finally {
       setAttendanceBusy(false);
-    }
-  }
-
-  async function saveHoliday(event) {
-    event.preventDefault();
-    setHolidayBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api.post('/holidays', holidayForm);
-      const { data: holidays } = await api.get('/holidays', { params: { year: attendanceYear } });
-      setHolidayRows(holidays);
-      setHolidayForm({ holiday_date: '', name: '' });
-      setNotice('Holiday added to the payroll calendar.');
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Holiday could not be added.');
-    } finally {
-      setHolidayBusy(false);
-    }
-  }
-
-  async function removeHoliday(holiday) {
-    setHolidayBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api.delete(`/holidays/${holiday.id}`);
-      setHolidayRows((current) => current.filter((row) => row.id !== holiday.id));
-      setNotice(`${holiday.name} was removed from the payroll calendar.`);
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Holiday could not be removed.');
-    } finally {
-      setHolidayBusy(false);
     }
   }
 
@@ -2362,11 +2405,11 @@ function EmployeePage({ kind, role }) {
     }
   }
 
-  const titles = { profile: 'My profile', attendance: 'Attendance', leaves: 'Time off', payroll: 'Pay & benefits' };
+  const titles = { profile: 'My profile', attendance: 'Attendance', leaves: role === 'employee' ? 'Time off' : 'Leave management', payroll: 'Pay & benefits' };
   const descriptions = {
     profile: 'Your work details, all in one place.',
     attendance: 'A clear view of your check-ins and hours.',
-    leaves: 'Your time-off balance and request history.',
+    leaves: role === 'employee' ? 'Your time-off balance and request history.' : 'Review requests, make decisions, and follow your team’s time off.',
     payroll: 'Your monthly pay statements and salary history.',
   };
   const monthName = (month) => {
@@ -2387,17 +2430,17 @@ function EmployeePage({ kind, role }) {
   const selectedPayrollMonthIsComplete = new Date(payrollYear, payrollMonth, 0) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   return (
-    <div className="workspace-page">
+    <div className={`workspace-page${kind === 'leaves' ? ' leave-management-page' : ''}`}>
       <header className="workspace-page-header">
         <div>
-          <span className="eyebrow">{isAdminPayroll || isAdminAttendance ? 'PEOPLE OPERATIONS' : 'YOUR PEOPLE SPACE'}</span>
+          <span className="eyebrow">{isAdminPayroll || isAdminAttendance || (kind === 'leaves' && role !== 'employee') ? 'PEOPLE OPERATIONS' : 'YOUR PEOPLE SPACE'}</span>
           <h1>{isAdminPayroll ? 'Payroll overview' : isAdminAttendance ? 'Team attendance' : kind === 'payroll' ? 'Payroll & salary slips' : titles[kind]}</h1>
           <p>{isAdminPayroll ? 'Monthly payroll at a glance, for your whole team.' : isAdminAttendance ? 'Review attendance records and correct time entries.' : kind === 'attendance' ? 'Daily records, monthly summaries, and your work hours.' : kind === 'payroll' ? 'Monthly salary from attendance and approved leave, with Loss-of-Pay deduction.' : descriptions[kind]}</p>
         </div>
         {kind !== 'attendance' && !isAdminPayroll && kind !== 'payroll' && <Link className="page-home-link" to="/">← Back to overview</Link>}
       </header>
       {error && <div className="dashboard-error" role="alert">{error}</div>}
-      {notice && <div className="dashboard-error" role="alert">{notice}</div>}
+      {notice && <div className="dashboard-success" role="status">{notice}</div>}
       {loading ? (
         <div className="page-loading"><span className="loading-ring" /> Gathering your details…</div>
       ) : (
@@ -2489,15 +2532,12 @@ function EmployeePage({ kind, role }) {
               {isAdminAttendance ? (
                 <>
                   <section className="record-section">
-                    <div className="record-section-heading"><div><span className="eyebrow">PAYROLL CALENDAR</span><h2>Company holidays</h2></div><span className="record-count">{holidayRows.length} this year</span></div>
-                    {role === 'admin' && <form className="employee-form" onSubmit={saveHoliday}>
-                      <label>Holiday date<input required type="date" value={holidayForm.holiday_date} onChange={(e) => setHolidayForm({ ...holidayForm, holiday_date: e.target.value })} /></label>
-                      <label>Holiday name<input required minLength={2} maxLength={120} value={holidayForm.name} onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })} /></label>
-                      <div className="employee-form-actions"><button className="employee-primary-button" disabled={holidayBusy}>{holidayBusy ? 'Saving…' : 'Add holiday'}</button></div>
-                    </form>}
+                    <div className="record-section-heading">
+                      <div><span className="eyebrow">PAYROLL CALENDAR</span><h2>Holidays</h2></div>
+                      <Link className="phase-text-button" to="/calendar">Manage calendar</Link>
+                    </div>
                     {holidayRows.length > 0 && <div className="leave-request-list">{holidayRows.map((holiday) => <article className="leave-request-card" key={holiday.id}>
-                      <strong>{holiday.name}</strong><span>{holiday.holiday_date}</span>
-                      {role === 'admin' && <button className="inline-action-button" type="button" disabled={holidayBusy} onClick={() => removeHoliday(holiday)}>Remove</button>}
+                      <strong>{holiday.name}</strong><span>{holiday.holiday_date}</span><span>{holiday.scope}{holiday.is_optional ? ' · optional' : ''}</span>
                     </article>)}</div>}
                   </section>
                   <section className="page-summary-grid">
@@ -2508,13 +2548,17 @@ function EmployeePage({ kind, role }) {
                   <section className="record-section">
                     <div className="record-section-heading"><div><span className="eyebrow">TEAM TIME</span><h2>Monthly attendance</h2></div><span className="record-count">{teamAttendanceRows.length} records</span></div>
                     {teamAttendanceRows.length ? (
-                      <div className="table-responsive custom-table"><table className="table"><thead><tr><th>Team member</th><th>Date</th><th>Check in</th><th>Check out</th><th>Hours</th><th>Status</th><th>Correction</th></tr></thead><tbody>
+                      <div className="table-responsive custom-table"><table className="table"><thead><tr><th>Team member</th><th>Date</th><th>Shift</th><th>Check in</th><th>Check out</th><th>Hours</th><th>Late</th><th>Early out</th><th>Overtime</th><th>Status</th><th>Correction</th></tr></thead><tbody>
                         {teamAttendanceRows.map((row) => <tr key={row.id}>
                           <td><div className="payroll-person"><span>{row.employee_name?.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'TM'}</span><div><strong>{row.employee_name || `Employee #${row.employee_id}`}</strong><small>{row.employee_code || ''}</small></div></div></td>
                           <td>{row.work_date}</td>
+                          <td>{row.shift_name || 'Unassigned'}</td>
                           <td>{row.check_in ? new Date(row.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                           <td>{row.check_out ? new Date(row.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                           <td>{Math.floor(row.working_minutes / 60)}h {row.working_minutes % 60}m</td>
+                          <td>{row.late_minutes} min</td>
+                          <td>{row.early_checkout_minutes} min</td>
+                          <td>{row.overtime_minutes} min</td>
                           <td><span className={`status-pill status-${row.status}`}>{row.status.replace('_', ' ')}</span></td>
                           <td>{role === 'admin' && <button className="inline-action-button" type="button" onClick={() => beginCorrection(row)}>Correct</button>}</td>
                         </tr>)}
@@ -2528,6 +2572,7 @@ function EmployeePage({ kind, role }) {
                       <form className="employee-form" onSubmit={saveCorrection}>
                         <label>Check in<input type="datetime-local" value={correctionForm.check_in} onChange={(e) => setCorrectionForm({ ...correctionForm, check_in: e.target.value })} /></label>
                         <label>Check out<input type="datetime-local" value={correctionForm.check_out} onChange={(e) => setCorrectionForm({ ...correctionForm, check_out: e.target.value })} /></label>
+                        <label>Shift<select value={correctionForm.shift_id} onChange={(e) => setCorrectionForm({ ...correctionForm, shift_id: e.target.value })}><option value="">Unassigned</option>{attendanceShifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}{shift.is_active ? '' : ' · inactive'}</option>)}</select></label>
                         <label>Status<select value={correctionForm.status} onChange={(e) => setCorrectionForm({ ...correctionForm, status: e.target.value })}><option value="present">Present</option><option value="absent">Absent</option><option value="half_day">Half day</option><option value="on_leave">On leave</option></select></label>
                         <label className="leave-reason-field">Correction reason<textarea required minLength={3} maxLength={500} rows="3" value={correctionForm.reason} onChange={(e) => setCorrectionForm({ ...correctionForm, reason: e.target.value })} /></label>
                         <div className="employee-form-actions"><button className="employee-primary-button" disabled={attendanceBusy}>{attendanceBusy ? 'Saving…' : 'Save correction'}</button><button className="employee-secondary-button" type="button" onClick={() => setCorrection(null)}>Cancel</button></div>
@@ -2618,10 +2663,10 @@ function EmployeePage({ kind, role }) {
                   </article>)}</div> : <div className="empty-state compact-empty"><span className="empty-art">✳</span><h3>No {leaveFilter === 'all' ? '' : `${leaveFilter} `}leave requests</h3><p>New employee requests will appear here for review.</p></div>}
                 </section>
               )}
-              <section className="record-section">
+              {role === 'employee' && <section className="record-section leave-history-section">
                 <div className="record-section-heading"><div><span className="eyebrow">{role === 'employee' ? 'YOUR REQUESTS' : 'REQUEST ARCHIVE'}</span><h2>{role === 'employee' ? 'Time-off history' : 'Request history'}</h2></div><span className="record-count">{leaveRows.length} requests</span></div>
                 {role === 'employee' && (leaveRows.length ? <div className="leave-list">{leaveRows.map((row) => <article className="leave-card" key={row.id}><span className="leave-date-box"><strong>{new Date(`${row.start_date}T00:00:00`).getDate()}</strong><small>{monthName(new Date(`${row.start_date}T00:00:00`).getMonth() + 1).slice(0, 3)}</small></span><div className="leave-info"><strong>{row.leave_type || row.reason || 'Time off request'}</strong><span>{row.start_date} — {row.end_date} · {row.days} days</span><small>{row.reason}</small></div><span className={`status-pill status-${row.status}`}>{row.status}</span></article>)}</div> : <div className="empty-state compact-empty"><span className="empty-art">✳</span><h3>No time-off requests yet</h3><p>Your leave requests and their status will be easy to find here.</p></div>)}
-              </section>
+              </section>}
             </>
           )}
 
@@ -2633,20 +2678,49 @@ function EmployeePage({ kind, role }) {
                 <span className={`status-pill ${data?.is_active ? 'active' : 'inactive'}`}>{data?.is_active ? 'Active' : 'Inactive'}</span>
               </section>
               <section className="record-section">
-                <div className="record-section-heading"><div><span className="eyebrow">YOUR DETAILS</span><h2>Work profile</h2></div></div>
-                <div className="profile-details">
-                  <div><small>WORK EMAIL</small><strong>{data?.email || '—'}</strong></div>
-                  <div><small>EMPLOYEE ID</small><strong>{data?.employee_code || '—'}</strong></div>
-                  <div><small>DESIGNATION</small><strong>{data?.designation || '—'}</strong></div>
-                  <div><small>DEPARTMENT</small><strong>{data?.department_name || (data?.department_id ? `Department ${data.department_id}` : 'Not assigned')}</strong></div>
-                  <div><small>JOINED</small><strong>{data?.joining_date ? new Intl.DateTimeFormat('en', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${data.joining_date}T00:00:00`)) : '—'}</strong></div>
-                  <div><small>PHONE</small><strong>{data?.phone || 'Not added'}</strong></div>
-                  <div><small>DATE OF BIRTH</small><strong>{data?.date_of_birth ? new Intl.DateTimeFormat('en', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${data.date_of_birth}T00:00:00`)) : 'Not added'}</strong></div>
-                  <div><small>HOME ADDRESS</small><strong>{data?.address || 'Not added'}</strong></div>
-                  <div><small>EMERGENCY CONTACT</small><strong>{data?.emergency_contact_name || 'Not added'}</strong></div>
-                  <div><small>RELATIONSHIP</small><strong>{data?.emergency_contact_relationship || 'Not added'}</strong></div>
-                  <div><small>EMERGENCY PHONE</small><strong>{data?.emergency_contact_phone || 'Not added'}</strong></div>
+                <div className="record-section-heading">
+                  <div><span className="eyebrow">YOUR DETAILS</span><h2>Work profile</h2></div>
+                  {role === 'employee' && !profileEditing && <button className="employee-secondary-button" type="button" onClick={() => setProfileEditing(true)}>Edit personal details</button>}
                 </div>
+                {profileEditing && role === 'employee' ? (
+                  <form className="employee-form profile-self-edit" onSubmit={saveProfile}>
+                    <label>Phone<input type="tel" maxLength={30} value={profileForm.phone} onChange={(event) => setProfileForm({ ...profileForm, phone: event.target.value })} /></label>
+                    <label>Date of birth<input type="date" max={new Date().toISOString().slice(0, 10)} value={profileForm.date_of_birth} onChange={(event) => setProfileForm({ ...profileForm, date_of_birth: event.target.value })} /></label>
+                    <label className="employee-form-wide">Home address<textarea rows="2" maxLength={2000} value={profileForm.address} onChange={(event) => setProfileForm({ ...profileForm, address: event.target.value })} /></label>
+                    <label>Emergency contact<input maxLength={160} value={profileForm.emergency_contact_name} onChange={(event) => setProfileForm({ ...profileForm, emergency_contact_name: event.target.value })} /></label>
+                    <label>Relationship<input maxLength={80} value={profileForm.emergency_contact_relationship} onChange={(event) => setProfileForm({ ...profileForm, emergency_contact_relationship: event.target.value })} /></label>
+                    <label>Emergency phone<input type="tel" maxLength={30} value={profileForm.emergency_contact_phone} onChange={(event) => setProfileForm({ ...profileForm, emergency_contact_phone: event.target.value })} /></label>
+                    <p className="profile-edit-note">Employment and salary information can only be changed by HR/Admin.</p>
+                    <div className="employee-form-actions">
+                      <button className="employee-primary-button" disabled={profileSaving}>{profileSaving ? 'Saving…' : 'Save details'}</button>
+                      <button className="employee-secondary-button" type="button" disabled={profileSaving} onClick={() => {
+                        setProfileForm({
+                          phone: data?.phone || '',
+                          date_of_birth: data?.date_of_birth || '',
+                          address: data?.address || '',
+                          emergency_contact_name: data?.emergency_contact_name || '',
+                          emergency_contact_relationship: data?.emergency_contact_relationship || '',
+                          emergency_contact_phone: data?.emergency_contact_phone || '',
+                        });
+                        setProfileEditing(false);
+                      }}>Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="profile-details">
+                    <div><small>WORK EMAIL</small><strong>{data?.email || '—'}</strong></div>
+                    <div><small>EMPLOYEE ID</small><strong>{data?.employee_code || '—'}</strong></div>
+                    <div><small>DESIGNATION</small><strong>{data?.designation || '—'}</strong></div>
+                    <div><small>DEPARTMENT</small><strong>{data?.department_name || (data?.department_id ? `Department ${data.department_id}` : 'Not assigned')}</strong></div>
+                    <div><small>JOINED</small><strong>{data?.joining_date ? new Intl.DateTimeFormat('en', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${data.joining_date}T00:00:00`)) : '—'}</strong></div>
+                    <div><small>PHONE</small><strong>{data?.phone || 'Not added'}</strong></div>
+                    <div><small>DATE OF BIRTH</small><strong>{data?.date_of_birth ? new Intl.DateTimeFormat('en', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${data.date_of_birth}T00:00:00`)) : 'Not added'}</strong></div>
+                    <div><small>HOME ADDRESS</small><strong>{data?.address || 'Not added'}</strong></div>
+                    <div><small>EMERGENCY CONTACT</small><strong>{data?.emergency_contact_name || 'Not added'}</strong></div>
+                    <div><small>RELATIONSHIP</small><strong>{data?.emergency_contact_relationship || 'Not added'}</strong></div>
+                    <div><small>EMERGENCY PHONE</small><strong>{data?.emergency_contact_phone || 'Not added'}</strong></div>
+                  </div>
+                )}
               </section>
               {role === 'employee' && (
                 <section className="record-section">
@@ -2691,9 +2765,12 @@ function DepartmentsPage() {
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
+  const [departmentName, setDepartmentName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -2731,10 +2808,36 @@ function DepartmentsPage() {
   const visibleDepartments = departmentRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const assignedCount = employees.filter((employee) => employee.department_id).length;
 
+  async function createDepartment(event) {
+    event.preventDefault();
+    const name = departmentName.trim();
+    if (name.length < 2) {
+      setError('Department name must contain at least 2 characters.');
+      setNotice('');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await api.post('/departments', { name });
+      setDepartments((current) => [...current, response.data].sort((left, right) => left.name.localeCompare(right.name)));
+      setDepartmentName('');
+      setCurrentPage(1);
+      setNotice(`${response.data.name} department added. It is now available in department filters.`);
+    } catch (requestError) {
+      const detail = requestError.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : 'The department could not be created. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="workspace-page">
       <header className="workspace-page-header"><div><span className="eyebrow">PEOPLE OPERATIONS</span><h1>Departments</h1><p>Explore teams and current employee distribution.</p></div><Link className="page-home-link" to="/">← Back to dashboard</Link></header>
       {error && <div className="dashboard-error" role="alert">{error}</div>}
+      {notice && <div className="dashboard-success" role="status">{notice}</div>}
       <section className="page-summary-grid">
         <article className="page-summary-card"><span className="today-icon today-blue">▤</span><small>DEPARTMENTS</small><strong>{loading ? '—' : departments.length}</strong><span>Organization teams</span></article>
         <article className="page-summary-card"><span className="today-icon today-green">♙</span><small>ASSIGNED EMPLOYEES</small><strong>{loading ? '—' : assignedCount}</strong><span>Across all departments</span></article>
@@ -2742,6 +2845,11 @@ function DepartmentsPage() {
       </section>
       <section className="record-section">
         <div className="record-section-heading"><div><span className="eyebrow">TEAM DIRECTORY</span><h2>Department headcount</h2></div><span className="record-count">{departmentRows.length} departments</span></div>
+        <form className="department-create-form" onSubmit={createDepartment}>
+          <label htmlFor="new-department-name">Add a department</label>
+          <input id="new-department-name" value={departmentName} onChange={(event) => setDepartmentName(event.target.value)} minLength={2} maxLength={120} placeholder="e.g. Finance, Marketing, Operations" required />
+          <button className="employee-primary-button" type="submit" disabled={saving}>{saving ? 'Adding…' : '＋ Add department'}</button>
+        </form>
         <div className="directory-filters">
           <label className="directory-search">Search teams or employees<input type="search" placeholder="Search by department or employee" value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }} /></label>
         </div>
@@ -2877,6 +2985,10 @@ export default function App() {
             <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/attendance"><span>◷</span> Attendance Management</NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/leaves"><span>▣</span> Leave Management</NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/payroll"><span>₹</span> Payroll Management</NavLink>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/calendar"><span>▦</span> Holiday calendar</NavLink>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/inbox"><span>♢</span> Notification center</NavLink>
+            {isHRStaff && <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/shifts"><span>◷</span> Shifts &amp; schedules</NavLink>}
+            {isHRStaff && <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/compensation"><span>₹</span> Compensation</NavLink>}
             <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to={isHRStaff ? '/reports' : '/payroll'}><span>▤</span> PDF Salary Slips &amp; Reports</NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/notifications"><span>✉</span> Notifications &amp; Audit Logs</NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} to="/reports"><span>▥</span> Reports &amp; Analytics</NavLink>
@@ -2915,6 +3027,10 @@ export default function App() {
           <Route path="/attendance" element={<EmployeePage kind="attendance" role={role} />} />
           <Route path="/leaves" element={<EmployeePage kind="leaves" role={role} />} />
           <Route path="/payroll" element={<EmployeePage kind="payroll" role={role} />} />
+          <Route path="/calendar" element={<HolidayCalendar role={role} />} />
+          <Route path="/inbox" element={<NotificationsCenter role={role} />} />
+          <Route path="/shifts" element={isHRStaff ? <ShiftManagement role={role} /> : <Navigate to="/" replace />} />
+          <Route path="/compensation" element={<CompensationWorkspace role={role} />} />
           <Route path="/register" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

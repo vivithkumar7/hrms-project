@@ -1,16 +1,16 @@
 {
     "application":  "Big Stack HRMS",
-    "generated_at":  "2026-10-14T18:44:53.9024252+05:30",
+    "generated_at":  "2026-10-16T10:33:27.2171509+05:30",
     "overall":  "PASS",
     "backend_tests":  {
                           "status":  "PASS",
                           "command":  "python -m pytest tests -q",
-                          "summary":  "16 passed, 1 warning in 12.84s"
+                          "summary":  "22 passed, 1 warning in 22.73s"
                       },
     "frontend_build":  {
                            "status":  "PASS",
                            "command":  "npm run build --prefix frontend",
-                           "summary":  "✓ built in 3.97s"
+                           "summary":  "Γ£ô built in 4.62s"
                        },
     "live_api":  {
                      "status":  "PASS",
@@ -19,9 +19,9 @@
                      "swagger_ui_http":  200,
                      "redoc_http":  200,
                      "openapi_http":  200,
-                     "documented_api_paths":  40,
-                     "documented_api_operations":  48,
-                     "bearer_protected_operations":  43,
+                     "documented_api_paths":  53,
+                     "documented_api_operations":  68,
+                     "bearer_protected_operations":  63,
                      "openapi_file":  "live-openapi.json"
                  },
     "note":  "All automated checks use a temporary SQLite database and fictional test records. No configured HRMS database is changed."

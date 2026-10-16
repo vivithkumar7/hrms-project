@@ -8,6 +8,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import (
     Image as ReportImage,
     PageBreak,
@@ -24,6 +25,16 @@ DELIVERABLES = ROOT / "deliverables"
 ASSETS = DELIVERABLES / "hrms-project-report-assets"
 OUTPUT = DELIVERABLES / "HRMS-Project-Report.pdf"
 TEST_RESULTS = DELIVERABLES / "live-test-results.json"
+SCREENSHOTS = [
+    ("dashboard.png", "Employee dashboard"),
+    ("employees.png", "Employee directory"),
+    ("attendance.png", "Attendance"),
+    ("leave.png", "Leave"),
+    ("payroll.png", "Payroll"),
+    ("notifications.png", "Notifications"),
+    ("reports.png", "Reports and analytics"),
+    ("profile.png", "Employee profile"),
+]
 
 INK = colors.HexColor("#172F3D")
 TEAL = colors.HexColor("#087F73")
@@ -48,8 +59,33 @@ def chrome(canvas, doc) -> None:
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(MUTED)
     canvas.drawString(0.65 * inch, 0.36 * inch, "BIG STACK PEOPLE  |  HRMS PROJECT REPORT")
-    canvas.drawRightString(page_width - 0.65 * inch, 0.36 * inch, f"{doc.page} / 10")
     canvas.restoreState()
+
+
+class NumberedCanvas(pdf_canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        page_count = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.saveState()
+            self.setFont("Helvetica", 8)
+            self.setFillColor(MUTED)
+            self.drawRightString(
+                letter[0] - 0.65 * inch,
+                0.36 * inch,
+                f"{self._pageNumber} / {page_count}",
+            )
+            self.restoreState()
+            super().showPage()
+        super().save()
 
 
 def make_styles():
@@ -473,6 +509,29 @@ def main() -> None:
         ),
     ])
 
+    story.append(PageBreak())
+    story.extend([
+        para("Appendix — application screenshots", styles["Section"]),
+        para(
+            "Full-page captures of the employee-facing application screens are included "
+            "below as a visual reference. These are the existing local demo screenshots; "
+            "they are not live captures from the current browser session.",
+            styles["Copy"],
+        ),
+        PageBreak(),
+    ])
+    for index, (filename, title) in enumerate(SCREENSHOTS):
+        story.extend([
+            para(f"Application screen {index + 1}: {title}", styles["Section"]),
+            image(ASSETS / filename, body_width, 8.25 * inch),
+            caption(
+                f"Full-page local application screenshot — {title}.",
+                styles,
+            ),
+        ])
+        if index < len(SCREENSHOTS) - 1:
+            story.append(PageBreak())
+
     doc = SimpleDocTemplate(
         str(OUTPUT),
         pagesize=letter,
@@ -482,9 +541,14 @@ def main() -> None:
         bottomMargin=0.58 * inch,
         title="HRMS Project Report",
         author="Big Stack People",
-        subject="Ten-page local HRMS feature, output, and validation report",
+        subject="Local HRMS feature, output, validation, and screenshot report",
     )
-    doc.build(story, onFirstPage=chrome, onLaterPages=chrome)
+    doc.build(
+        story,
+        onFirstPage=chrome,
+        onLaterPages=chrome,
+        canvasmaker=NumberedCanvas,
+    )
     print(f"Created {OUTPUT} at {datetime.now().isoformat(timespec='seconds')}")
 
 

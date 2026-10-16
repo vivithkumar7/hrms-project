@@ -32,9 +32,14 @@ try:
         db.flush()
 
     if not db.query(Employee).filter_by(user_id=admin_user.id).first():
+        employee_code = "ADMIN-001"
+        suffix = admin_user.id
+        while db.query(Employee).filter_by(employee_code=employee_code).first():
+            employee_code = f"ADMIN-{suffix:03d}"
+            suffix += 1
         admin_employee = Employee(
             user_id=admin_user.id,
-            employee_code="ADMIN-001",
+            employee_code=employee_code,
             full_name="System Administrator",
             department_id=engineering.id,
             designation="Administrator",

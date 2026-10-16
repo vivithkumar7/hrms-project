@@ -519,7 +519,50 @@
                                                                                                      ]
                                                                         }
                                                                     ]
-                                                   }
+                                                   },
+                                           "post":  {
+                                                        "summary":  "Create Department",
+                                                        "operationId":  "create_department_api_departments_post",
+                                                        "requestBody":  {
+                                                                            "content":  {
+                                                                                            "application/json":  {
+                                                                                                                     "schema":  {
+                                                                                                                                    "$ref":  "#/components/schemas/DepartmentCreate"
+                                                                                                                                }
+                                                                                                                 }
+                                                                                        },
+                                                                            "required":  true
+                                                                        },
+                                                        "responses":  {
+                                                                          "201":  {
+                                                                                      "description":  "Successful Response",
+                                                                                      "content":  {
+                                                                                                      "application/json":  {
+                                                                                                                               "schema":  {
+
+                                                                                                                                          }
+                                                                                                                           }
+                                                                                                  }
+                                                                                  },
+                                                                          "422":  {
+                                                                                      "description":  "Validation Error",
+                                                                                      "content":  {
+                                                                                                      "application/json":  {
+                                                                                                                               "schema":  {
+                                                                                                                                              "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                          }
+                                                                                                                           }
+                                                                                                  }
+                                                                                  }
+                                                                      },
+                                                        "security":  [
+                                                                         {
+                                                                             "OAuth2PasswordBearer":  [
+
+                                                                                                      ]
+                                                                         }
+                                                                     ]
+                                                    }
                                        },
                   "/api/holidays":  {
                                         "get":  {
@@ -683,6 +726,51 @@
                                                                      ]
                                                     }
                                         },
+                  "/api/employees/me/profile":  {
+                                                    "patch":  {
+                                                                  "summary":  "Update My Profile",
+                                                                  "operationId":  "update_my_profile_api_employees_me_profile_patch",
+                                                                  "requestBody":  {
+                                                                                      "content":  {
+                                                                                                      "application/json":  {
+                                                                                                                               "schema":  {
+                                                                                                                                              "$ref":  "#/components/schemas/EmployeeSelfProfileUpdate"
+                                                                                                                                          }
+                                                                                                                           }
+                                                                                                  },
+                                                                                      "required":  true
+                                                                                  },
+                                                                  "responses":  {
+                                                                                    "200":  {
+                                                                                                "description":  "Successful Response",
+                                                                                                "content":  {
+                                                                                                                "application/json":  {
+                                                                                                                                         "schema":  {
+
+                                                                                                                                                    }
+                                                                                                                                     }
+                                                                                                            }
+                                                                                            },
+                                                                                    "422":  {
+                                                                                                "description":  "Validation Error",
+                                                                                                "content":  {
+                                                                                                                "application/json":  {
+                                                                                                                                         "schema":  {
+                                                                                                                                                        "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                    }
+                                                                                                                                     }
+                                                                                                            }
+                                                                                            }
+                                                                                },
+                                                                  "security":  [
+                                                                                   {
+                                                                                       "OAuth2PasswordBearer":  [
+
+                                                                                                                ]
+                                                                                   }
+                                                                               ]
+                                                              }
+                                                },
                   "/api/employees/{employee_id}":  {
                                                        "get":  {
                                                                    "summary":  "Get Employee",
@@ -1638,6 +1726,22 @@
                                                                                                    ],
                                                                                          "title":  "Department Id"
                                                                                      }
+                                                                      },
+                                                                      {
+                                                                          "name":  "employee_id",
+                                                                          "in":  "query",
+                                                                          "required":  false,
+                                                                          "schema":  {
+                                                                                         "anyOf":  [
+                                                                                                       {
+                                                                                                           "type":  "integer"
+                                                                                                       },
+                                                                                                       {
+                                                                                                           "type":  "null"
+                                                                                                       }
+                                                                                                   ],
+                                                                                         "title":  "Employee Id"
+                                                                                     }
                                                                       }
                                                                   ],
                                                    "responses":  {
@@ -2278,7 +2382,898 @@
                                                                                         }
                                                                             }
                                                           }
-                                              }
+                                              },
+                  "/api/holidays/calendar":  {
+                                                 "get":  {
+                                                             "summary":  "Holiday Calendar",
+                                                             "operationId":  "holiday_calendar_api_holidays_calendar_get",
+                                                             "security":  [
+                                                                              {
+                                                                                  "OAuth2PasswordBearer":  [
+
+                                                                                                           ]
+                                                                              }
+                                                                          ],
+                                                             "parameters":  [
+                                                                                {
+                                                                                    "name":  "year",
+                                                                                    "in":  "query",
+                                                                                    "required":  true,
+                                                                                    "schema":  {
+                                                                                                   "type":  "integer",
+                                                                                                   "maximum":  2100,
+                                                                                                   "minimum":  2000,
+                                                                                                   "title":  "Year"
+                                                                                               }
+                                                                                }
+                                                                            ],
+                                                             "responses":  {
+                                                                               "200":  {
+                                                                                           "description":  "Successful Response",
+                                                                                           "content":  {
+                                                                                                           "application/json":  {
+                                                                                                                                    "schema":  {
+
+                                                                                                                                               }
+                                                                                                                                }
+                                                                                                       }
+                                                                                       },
+                                                                               "422":  {
+                                                                                           "description":  "Validation Error",
+                                                                                           "content":  {
+                                                                                                           "application/json":  {
+                                                                                                                                    "schema":  {
+                                                                                                                                                   "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                               }
+                                                                                                                                }
+                                                                                                       }
+                                                                                       }
+                                                                           }
+                                                         }
+                                             },
+                  "/api/notifications/me":  {
+                                                "get":  {
+                                                            "summary":  "My Notifications",
+                                                            "operationId":  "my_notifications_api_notifications_me_get",
+                                                            "security":  [
+                                                                             {
+                                                                                 "OAuth2PasswordBearer":  [
+
+                                                                                                          ]
+                                                                             }
+                                                                         ],
+                                                            "parameters":  [
+                                                                               {
+                                                                                   "name":  "limit",
+                                                                                   "in":  "query",
+                                                                                   "required":  false,
+                                                                                   "schema":  {
+                                                                                                  "type":  "integer",
+                                                                                                  "maximum":  200,
+                                                                                                  "minimum":  1,
+                                                                                                  "default":  100,
+                                                                                                  "title":  "Limit"
+                                                                                              }
+                                                                               }
+                                                                           ],
+                                                            "responses":  {
+                                                                              "200":  {
+                                                                                          "description":  "Successful Response",
+                                                                                          "content":  {
+                                                                                                          "application/json":  {
+                                                                                                                                   "schema":  {
+
+                                                                                                                                              }
+                                                                                                                               }
+                                                                                                      }
+                                                                                      },
+                                                                              "422":  {
+                                                                                          "description":  "Validation Error",
+                                                                                          "content":  {
+                                                                                                          "application/json":  {
+                                                                                                                                   "schema":  {
+                                                                                                                                                  "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                              }
+                                                                                                                               }
+                                                                                                      }
+                                                                                      }
+                                                                          }
+                                                        }
+                                            },
+                  "/api/notifications/me/preferences":  {
+                                                            "get":  {
+                                                                        "summary":  "List Notification Preferences",
+                                                                        "operationId":  "list_notification_preferences_api_notifications_me_preferences_get",
+                                                                        "responses":  {
+                                                                                          "200":  {
+                                                                                                      "description":  "Successful Response",
+                                                                                                      "content":  {
+                                                                                                                      "application/json":  {
+                                                                                                                                               "schema":  {
+
+                                                                                                                                                          }
+                                                                                                                                           }
+                                                                                                                  }
+                                                                                                  }
+                                                                                      },
+                                                                        "security":  [
+                                                                                         {
+                                                                                             "OAuth2PasswordBearer":  [
+
+                                                                                                                      ]
+                                                                                         }
+                                                                                     ]
+                                                                    },
+                                                            "patch":  {
+                                                                          "summary":  "Update Notification Preference",
+                                                                          "operationId":  "update_notification_preference_api_notifications_me_preferences_patch",
+                                                                          "requestBody":  {
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+                                                                                                                                                      "$ref":  "#/components/schemas/NotificationPreferenceIn"
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          },
+                                                                                              "required":  true
+                                                                                          },
+                                                                          "responses":  {
+                                                                                            "200":  {
+                                                                                                        "description":  "Successful Response",
+                                                                                                        "content":  {
+                                                                                                                        "application/json":  {
+                                                                                                                                                 "schema":  {
+
+                                                                                                                                                            }
+                                                                                                                                             }
+                                                                                                                    }
+                                                                                                    },
+                                                                                            "422":  {
+                                                                                                        "description":  "Validation Error",
+                                                                                                        "content":  {
+                                                                                                                        "application/json":  {
+                                                                                                                                                 "schema":  {
+                                                                                                                                                                "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                            }
+                                                                                                                                             }
+                                                                                                                    }
+                                                                                                    }
+                                                                                        },
+                                                                          "security":  [
+                                                                                           {
+                                                                                               "OAuth2PasswordBearer":  [
+
+                                                                                                                        ]
+                                                                                           }
+                                                                                       ]
+                                                                      }
+                                                        },
+                  "/api/notifications/me/{notification_id}/read":  {
+                                                                       "post":  {
+                                                                                    "summary":  "Mark Notification Read",
+                                                                                    "operationId":  "mark_notification_read_api_notifications_me__notification_id__read_post",
+                                                                                    "security":  [
+                                                                                                     {
+                                                                                                         "OAuth2PasswordBearer":  [
+
+                                                                                                                                  ]
+                                                                                                     }
+                                                                                                 ],
+                                                                                    "parameters":  [
+                                                                                                       {
+                                                                                                           "name":  "notification_id",
+                                                                                                           "in":  "path",
+                                                                                                           "required":  true,
+                                                                                                           "schema":  {
+                                                                                                                          "type":  "integer",
+                                                                                                                          "title":  "Notification Id"
+                                                                                                                      }
+                                                                                                       }
+                                                                                                   ],
+                                                                                    "responses":  {
+                                                                                                      "200":  {
+                                                                                                                  "description":  "Successful Response",
+                                                                                                                  "content":  {
+                                                                                                                                  "application/json":  {
+                                                                                                                                                           "schema":  {
+
+                                                                                                                                                                      }
+                                                                                                                                                       }
+                                                                                                                              }
+                                                                                                              },
+                                                                                                      "422":  {
+                                                                                                                  "description":  "Validation Error",
+                                                                                                                  "content":  {
+                                                                                                                                  "application/json":  {
+                                                                                                                                                           "schema":  {
+                                                                                                                                                                          "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                      }
+                                                                                                                                                       }
+                                                                                                                              }
+                                                                                                              }
+                                                                                                  }
+                                                                                }
+                                                                   },
+                  "/api/notifications/broadcast":  {
+                                                       "post":  {
+                                                                    "summary":  "Broadcast Notification",
+                                                                    "operationId":  "broadcast_notification_api_notifications_broadcast_post",
+                                                                    "requestBody":  {
+                                                                                        "content":  {
+                                                                                                        "application/json":  {
+                                                                                                                                 "schema":  {
+                                                                                                                                                "$ref":  "#/components/schemas/BroadcastIn"
+                                                                                                                                            }
+                                                                                                                             }
+                                                                                                    },
+                                                                                        "required":  true
+                                                                                    },
+                                                                    "responses":  {
+                                                                                      "201":  {
+                                                                                                  "description":  "Successful Response",
+                                                                                                  "content":  {
+                                                                                                                  "application/json":  {
+                                                                                                                                           "schema":  {
+
+                                                                                                                                                      }
+                                                                                                                                       }
+                                                                                                              }
+                                                                                              },
+                                                                                      "422":  {
+                                                                                                  "description":  "Validation Error",
+                                                                                                  "content":  {
+                                                                                                                  "application/json":  {
+                                                                                                                                           "schema":  {
+                                                                                                                                                          "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                      }
+                                                                                                                                       }
+                                                                                                              }
+                                                                                              }
+                                                                                  },
+                                                                    "security":  [
+                                                                                     {
+                                                                                         "OAuth2PasswordBearer":  [
+
+                                                                                                                  ]
+                                                                                     }
+                                                                                 ]
+                                                                }
+                                                   },
+                  "/api/shifts":  {
+                                      "get":  {
+                                                  "summary":  "List Shifts",
+                                                  "operationId":  "list_shifts_api_shifts_get",
+                                                  "security":  [
+                                                                   {
+                                                                       "OAuth2PasswordBearer":  [
+
+                                                                                                ]
+                                                                   }
+                                                               ],
+                                                  "parameters":  [
+                                                                     {
+                                                                         "name":  "include_inactive",
+                                                                         "in":  "query",
+                                                                         "required":  false,
+                                                                         "schema":  {
+                                                                                        "type":  "boolean",
+                                                                                        "default":  false,
+                                                                                        "title":  "Include Inactive"
+                                                                                    }
+                                                                     }
+                                                                 ],
+                                                  "responses":  {
+                                                                    "200":  {
+                                                                                "description":  "Successful Response",
+                                                                                "content":  {
+                                                                                                "application/json":  {
+                                                                                                                         "schema":  {
+
+                                                                                                                                    }
+                                                                                                                     }
+                                                                                            }
+                                                                            },
+                                                                    "422":  {
+                                                                                "description":  "Validation Error",
+                                                                                "content":  {
+                                                                                                "application/json":  {
+                                                                                                                         "schema":  {
+                                                                                                                                        "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                    }
+                                                                                                                     }
+                                                                                            }
+                                                                            }
+                                                                }
+                                              },
+                                      "post":  {
+                                                   "summary":  "Create Shift",
+                                                   "operationId":  "create_shift_api_shifts_post",
+                                                   "security":  [
+                                                                    {
+                                                                        "OAuth2PasswordBearer":  [
+
+                                                                                                 ]
+                                                                    }
+                                                                ],
+                                                   "requestBody":  {
+                                                                       "required":  true,
+                                                                       "content":  {
+                                                                                       "application/json":  {
+                                                                                                                "schema":  {
+                                                                                                                               "$ref":  "#/components/schemas/ShiftIn"
+                                                                                                                           }
+                                                                                                            }
+                                                                                   }
+                                                                   },
+                                                   "responses":  {
+                                                                     "201":  {
+                                                                                 "description":  "Successful Response",
+                                                                                 "content":  {
+                                                                                                 "application/json":  {
+                                                                                                                          "schema":  {
+
+                                                                                                                                     }
+                                                                                                                      }
+                                                                                             }
+                                                                             },
+                                                                     "422":  {
+                                                                                 "description":  "Validation Error",
+                                                                                 "content":  {
+                                                                                                 "application/json":  {
+                                                                                                                          "schema":  {
+                                                                                                                                         "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                     }
+                                                                                                                      }
+                                                                                             }
+                                                                             }
+                                                                 }
+                                               }
+                                  },
+                  "/api/shifts/{shift_id}":  {
+                                                 "patch":  {
+                                                               "summary":  "Update Shift Status",
+                                                               "operationId":  "update_shift_status_api_shifts__shift_id__patch",
+                                                               "security":  [
+                                                                                {
+                                                                                    "OAuth2PasswordBearer":  [
+
+                                                                                                             ]
+                                                                                }
+                                                                            ],
+                                                               "parameters":  [
+                                                                                  {
+                                                                                      "name":  "shift_id",
+                                                                                      "in":  "path",
+                                                                                      "required":  true,
+                                                                                      "schema":  {
+                                                                                                     "type":  "integer",
+                                                                                                     "title":  "Shift Id"
+                                                                                                 }
+                                                                                  }
+                                                                              ],
+                                                               "requestBody":  {
+                                                                                   "required":  true,
+                                                                                   "content":  {
+                                                                                                   "application/json":  {
+                                                                                                                            "schema":  {
+                                                                                                                                           "$ref":  "#/components/schemas/ShiftStatusIn"
+                                                                                                                                       }
+                                                                                                                        }
+                                                                                               }
+                                                                               },
+                                                               "responses":  {
+                                                                                 "200":  {
+                                                                                             "description":  "Successful Response",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         },
+                                                                                 "422":  {
+                                                                                             "description":  "Validation Error",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+                                                                                                                                                     "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         }
+                                                                             }
+                                                           }
+                                             },
+                  "/api/shifts/assignments":  {
+                                                  "post":  {
+                                                               "summary":  "Assign Shift",
+                                                               "operationId":  "assign_shift_api_shifts_assignments_post",
+                                                               "security":  [
+                                                                                {
+                                                                                    "OAuth2PasswordBearer":  [
+
+                                                                                                             ]
+                                                                                }
+                                                                            ],
+                                                               "requestBody":  {
+                                                                                   "required":  true,
+                                                                                   "content":  {
+                                                                                                   "application/json":  {
+                                                                                                                            "schema":  {
+                                                                                                                                           "$ref":  "#/components/schemas/ShiftAssignmentIn"
+                                                                                                                                       }
+                                                                                                                        }
+                                                                                               }
+                                                                               },
+                                                               "responses":  {
+                                                                                 "201":  {
+                                                                                             "description":  "Successful Response",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         },
+                                                                                 "422":  {
+                                                                                             "description":  "Validation Error",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+                                                                                                                                                     "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         }
+                                                                             }
+                                                           },
+                                                  "get":  {
+                                                              "summary":  "List Shift Assignments",
+                                                              "operationId":  "list_shift_assignments_api_shifts_assignments_get",
+                                                              "security":  [
+                                                                               {
+                                                                                   "OAuth2PasswordBearer":  [
+
+                                                                                                            ]
+                                                                               }
+                                                                           ],
+                                                              "parameters":  [
+                                                                                 {
+                                                                                     "name":  "employee_id",
+                                                                                     "in":  "query",
+                                                                                     "required":  false,
+                                                                                     "schema":  {
+                                                                                                    "anyOf":  [
+                                                                                                                  {
+                                                                                                                      "type":  "integer"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "type":  "null"
+                                                                                                                  }
+                                                                                                              ],
+                                                                                                    "title":  "Employee Id"
+                                                                                                }
+                                                                                 },
+                                                                                 {
+                                                                                     "name":  "department_id",
+                                                                                     "in":  "query",
+                                                                                     "required":  false,
+                                                                                     "schema":  {
+                                                                                                    "anyOf":  [
+                                                                                                                  {
+                                                                                                                      "type":  "integer"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "type":  "null"
+                                                                                                                  }
+                                                                                                              ],
+                                                                                                    "title":  "Department Id"
+                                                                                                }
+                                                                                 },
+                                                                                 {
+                                                                                     "name":  "include_history",
+                                                                                     "in":  "query",
+                                                                                     "required":  false,
+                                                                                     "schema":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "default":  false,
+                                                                                                    "title":  "Include History"
+                                                                                                }
+                                                                                 }
+                                                                             ],
+                                                              "responses":  {
+                                                                                "200":  {
+                                                                                            "description":  "Successful Response",
+                                                                                            "content":  {
+                                                                                                            "application/json":  {
+                                                                                                                                     "schema":  {
+
+                                                                                                                                                }
+                                                                                                                                 }
+                                                                                                        }
+                                                                                        },
+                                                                                "422":  {
+                                                                                            "description":  "Validation Error",
+                                                                                            "content":  {
+                                                                                                            "application/json":  {
+                                                                                                                                     "schema":  {
+                                                                                                                                                    "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                }
+                                                                                                                                 }
+                                                                                                        }
+                                                                                        }
+                                                                            }
+                                                          }
+                                              },
+                  "/api/shifts/attendance":  {
+                                                 "get":  {
+                                                             "summary":  "Shift Attendance Report",
+                                                             "operationId":  "shift_attendance_report_api_shifts_attendance_get",
+                                                             "security":  [
+                                                                              {
+                                                                                  "OAuth2PasswordBearer":  [
+
+                                                                                                           ]
+                                                                              }
+                                                                          ],
+                                                             "parameters":  [
+                                                                                {
+                                                                                    "name":  "start_date",
+                                                                                    "in":  "query",
+                                                                                    "required":  true,
+                                                                                    "schema":  {
+                                                                                                   "type":  "string",
+                                                                                                   "format":  "date",
+                                                                                                   "title":  "Start Date"
+                                                                                               }
+                                                                                },
+                                                                                {
+                                                                                    "name":  "end_date",
+                                                                                    "in":  "query",
+                                                                                    "required":  true,
+                                                                                    "schema":  {
+                                                                                                   "type":  "string",
+                                                                                                   "format":  "date",
+                                                                                                   "title":  "End Date"
+                                                                                               }
+                                                                                },
+                                                                                {
+                                                                                    "name":  "shift_id",
+                                                                                    "in":  "query",
+                                                                                    "required":  false,
+                                                                                    "schema":  {
+                                                                                                   "anyOf":  [
+                                                                                                                 {
+                                                                                                                     "type":  "integer"
+                                                                                                                 },
+                                                                                                                 {
+                                                                                                                     "type":  "null"
+                                                                                                                 }
+                                                                                                             ],
+                                                                                                   "title":  "Shift Id"
+                                                                                               }
+                                                                                },
+                                                                                {
+                                                                                    "name":  "department_id",
+                                                                                    "in":  "query",
+                                                                                    "required":  false,
+                                                                                    "schema":  {
+                                                                                                   "anyOf":  [
+                                                                                                                 {
+                                                                                                                     "type":  "integer"
+                                                                                                                 },
+                                                                                                                 {
+                                                                                                                     "type":  "null"
+                                                                                                                 }
+                                                                                                             ],
+                                                                                                   "title":  "Department Id"
+                                                                                               }
+                                                                                }
+                                                                            ],
+                                                             "responses":  {
+                                                                               "200":  {
+                                                                                           "description":  "Successful Response",
+                                                                                           "content":  {
+                                                                                                           "application/json":  {
+                                                                                                                                    "schema":  {
+
+                                                                                                                                               }
+                                                                                                                                }
+                                                                                                       }
+                                                                                       },
+                                                                               "422":  {
+                                                                                           "description":  "Validation Error",
+                                                                                           "content":  {
+                                                                                                           "application/json":  {
+                                                                                                                                    "schema":  {
+                                                                                                                                                   "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                               }
+                                                                                                                                }
+                                                                                                       }
+                                                                                       }
+                                                                           }
+                                                         }
+                                             },
+                  "/api/payroll/components":  {
+                                                  "get":  {
+                                                              "summary":  "List Salary Components",
+                                                              "operationId":  "list_salary_components_api_payroll_components_get",
+                                                              "responses":  {
+                                                                                "200":  {
+                                                                                            "description":  "Successful Response",
+                                                                                            "content":  {
+                                                                                                            "application/json":  {
+                                                                                                                                     "schema":  {
+
+                                                                                                                                                }
+                                                                                                                                 }
+                                                                                                        }
+                                                                                        }
+                                                                            },
+                                                              "security":  [
+                                                                               {
+                                                                                   "OAuth2PasswordBearer":  [
+
+                                                                                                            ]
+                                                                               }
+                                                                           ]
+                                                          },
+                                                  "post":  {
+                                                               "summary":  "Create Salary Component",
+                                                               "operationId":  "create_salary_component_api_payroll_components_post",
+                                                               "requestBody":  {
+                                                                                   "content":  {
+                                                                                                   "application/json":  {
+                                                                                                                            "schema":  {
+                                                                                                                                           "$ref":  "#/components/schemas/SalaryComponentIn"
+                                                                                                                                       }
+                                                                                                                        }
+                                                                                               },
+                                                                                   "required":  true
+                                                                               },
+                                                               "responses":  {
+                                                                                 "201":  {
+                                                                                             "description":  "Successful Response",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         },
+                                                                                 "422":  {
+                                                                                             "description":  "Validation Error",
+                                                                                             "content":  {
+                                                                                                             "application/json":  {
+                                                                                                                                      "schema":  {
+                                                                                                                                                     "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                 }
+                                                                                                                                  }
+                                                                                                         }
+                                                                                         }
+                                                                             },
+                                                               "security":  [
+                                                                                {
+                                                                                    "OAuth2PasswordBearer":  [
+
+                                                                                                             ]
+                                                                                }
+                                                                            ]
+                                                           }
+                                              },
+                  "/api/payroll/compensation/{employee_id}/components":  {
+                                                                             "post":  {
+                                                                                          "summary":  "Assign Employee Component",
+                                                                                          "operationId":  "assign_employee_component_api_payroll_compensation__employee_id__components_post",
+                                                                                          "security":  [
+                                                                                                           {
+                                                                                                               "OAuth2PasswordBearer":  [
+
+                                                                                                                                        ]
+                                                                                                           }
+                                                                                                       ],
+                                                                                          "parameters":  [
+                                                                                                             {
+                                                                                                                 "name":  "employee_id",
+                                                                                                                 "in":  "path",
+                                                                                                                 "required":  true,
+                                                                                                                 "schema":  {
+                                                                                                                                "type":  "integer",
+                                                                                                                                "title":  "Employee Id"
+                                                                                                                            }
+                                                                                                             }
+                                                                                                         ],
+                                                                                          "requestBody":  {
+                                                                                                              "required":  true,
+                                                                                                              "content":  {
+                                                                                                                              "application/json":  {
+                                                                                                                                                       "schema":  {
+                                                                                                                                                                      "$ref":  "#/components/schemas/EmployeeComponentIn"
+                                                                                                                                                                  }
+                                                                                                                                                   }
+                                                                                                                          }
+                                                                                                          },
+                                                                                          "responses":  {
+                                                                                                            "201":  {
+                                                                                                                        "description":  "Successful Response",
+                                                                                                                        "content":  {
+                                                                                                                                        "application/json":  {
+                                                                                                                                                                 "schema":  {
+
+                                                                                                                                                                            }
+                                                                                                                                                             }
+                                                                                                                                    }
+                                                                                                                    },
+                                                                                                            "422":  {
+                                                                                                                        "description":  "Validation Error",
+                                                                                                                        "content":  {
+                                                                                                                                        "application/json":  {
+                                                                                                                                                                 "schema":  {
+                                                                                                                                                                                "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                            }
+                                                                                                                                                             }
+                                                                                                                                    }
+                                                                                                                    }
+                                                                                                        }
+                                                                                      },
+                                                                             "get":  {
+                                                                                         "summary":  "List Employee Components",
+                                                                                         "operationId":  "list_employee_components_api_payroll_compensation__employee_id__components_get",
+                                                                                         "security":  [
+                                                                                                          {
+                                                                                                              "OAuth2PasswordBearer":  [
+
+                                                                                                                                       ]
+                                                                                                          }
+                                                                                                      ],
+                                                                                         "parameters":  [
+                                                                                                            {
+                                                                                                                "name":  "employee_id",
+                                                                                                                "in":  "path",
+                                                                                                                "required":  true,
+                                                                                                                "schema":  {
+                                                                                                                               "type":  "integer",
+                                                                                                                               "title":  "Employee Id"
+                                                                                                                           }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "name":  "include_history",
+                                                                                                                "in":  "query",
+                                                                                                                "required":  false,
+                                                                                                                "schema":  {
+                                                                                                                               "type":  "boolean",
+                                                                                                                               "default":  false,
+                                                                                                                               "title":  "Include History"
+                                                                                                                           }
+                                                                                                            }
+                                                                                                        ],
+                                                                                         "responses":  {
+                                                                                                           "200":  {
+                                                                                                                       "description":  "Successful Response",
+                                                                                                                       "content":  {
+                                                                                                                                       "application/json":  {
+                                                                                                                                                                "schema":  {
+
+                                                                                                                                                                           }
+                                                                                                                                                            }
+                                                                                                                                   }
+                                                                                                                   },
+                                                                                                           "422":  {
+                                                                                                                       "description":  "Validation Error",
+                                                                                                                       "content":  {
+                                                                                                                                       "application/json":  {
+                                                                                                                                                                "schema":  {
+                                                                                                                                                                               "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                           }
+                                                                                                                                                            }
+                                                                                                                                   }
+                                                                                                                   }
+                                                                                                       }
+                                                                                     }
+                                                                         },
+                  "/api/payroll/compensation/{employee_id}/base":  {
+                                                                       "get":  {
+                                                                                   "summary":  "List Base Compensation",
+                                                                                   "operationId":  "list_base_compensation_api_payroll_compensation__employee_id__base_get",
+                                                                                   "security":  [
+                                                                                                    {
+                                                                                                        "OAuth2PasswordBearer":  [
+
+                                                                                                                                 ]
+                                                                                                    }
+                                                                                                ],
+                                                                                   "parameters":  [
+                                                                                                      {
+                                                                                                          "name":  "employee_id",
+                                                                                                          "in":  "path",
+                                                                                                          "required":  true,
+                                                                                                          "schema":  {
+                                                                                                                         "type":  "integer",
+                                                                                                                         "title":  "Employee Id"
+                                                                                                                     }
+                                                                                                      }
+                                                                                                  ],
+                                                                                   "responses":  {
+                                                                                                     "200":  {
+                                                                                                                 "description":  "Successful Response",
+                                                                                                                 "content":  {
+                                                                                                                                 "application/json":  {
+                                                                                                                                                          "schema":  {
+
+                                                                                                                                                                     }
+                                                                                                                                                      }
+                                                                                                                             }
+                                                                                                             },
+                                                                                                     "422":  {
+                                                                                                                 "description":  "Validation Error",
+                                                                                                                 "content":  {
+                                                                                                                                 "application/json":  {
+                                                                                                                                                          "schema":  {
+                                                                                                                                                                         "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                     }
+                                                                                                                                                      }
+                                                                                                                             }
+                                                                                                             }
+                                                                                                 }
+                                                                               },
+                                                                       "post":  {
+                                                                                    "summary":  "Revise Base Compensation",
+                                                                                    "operationId":  "revise_base_compensation_api_payroll_compensation__employee_id__base_post",
+                                                                                    "security":  [
+                                                                                                     {
+                                                                                                         "OAuth2PasswordBearer":  [
+
+                                                                                                                                  ]
+                                                                                                     }
+                                                                                                 ],
+                                                                                    "parameters":  [
+                                                                                                       {
+                                                                                                           "name":  "employee_id",
+                                                                                                           "in":  "path",
+                                                                                                           "required":  true,
+                                                                                                           "schema":  {
+                                                                                                                          "type":  "integer",
+                                                                                                                          "title":  "Employee Id"
+                                                                                                                      }
+                                                                                                       }
+                                                                                                   ],
+                                                                                    "requestBody":  {
+                                                                                                        "required":  true,
+                                                                                                        "content":  {
+                                                                                                                        "application/json":  {
+                                                                                                                                                 "schema":  {
+                                                                                                                                                                "$ref":  "#/components/schemas/BaseCompensationIn"
+                                                                                                                                                            }
+                                                                                                                                             }
+                                                                                                                    }
+                                                                                                    },
+                                                                                    "responses":  {
+                                                                                                      "201":  {
+                                                                                                                  "description":  "Successful Response",
+                                                                                                                  "content":  {
+                                                                                                                                  "application/json":  {
+                                                                                                                                                           "schema":  {
+
+                                                                                                                                                                      }
+                                                                                                                                                       }
+                                                                                                                              }
+                                                                                                              },
+                                                                                                      "422":  {
+                                                                                                                  "description":  "Validation Error",
+                                                                                                                  "content":  {
+                                                                                                                                  "application/json":  {
+                                                                                                                                                           "schema":  {
+                                                                                                                                                                          "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                      }
+                                                                                                                                                       }
+                                                                                                                              }
+                                                                                                              }
+                                                                                                  }
+                                                                                }
+                                                                   }
               },
     "components":  {
                        "schemas":  {
@@ -2308,6 +3303,18 @@
                                                                                                                    ],
                                                                                                          "title":  "Check Out"
                                                                                                      },
+                                                                                       "shift_id":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "integer",
+                                                                                                                          "minimum":  1.0
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Shift Id"
+                                                                                                    },
                                                                                        "status":  {
                                                                                                       "anyOf":  [
                                                                                                                     {
@@ -2333,6 +3340,99 @@
                                                                                  ],
                                                                     "title":  "AttendanceCorrection"
                                                                 },
+                                       "BaseCompensationIn":  {
+                                                                  "properties":  {
+                                                                                     "basic_salary":  {
+                                                                                                          "anyOf":  [
+                                                                                                                        {
+                                                                                                                            "type":  "number",
+                                                                                                                            "minimum":  0.0
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "type":  "string"
+                                                                                                                        }
+                                                                                                                    ],
+                                                                                                          "title":  "Basic Salary"
+                                                                                                      },
+                                                                                     "hra":  {
+                                                                                                 "anyOf":  [
+                                                                                                               {
+                                                                                                                   "type":  "number",
+                                                                                                                   "minimum":  0.0
+                                                                                                               },
+                                                                                                               {
+                                                                                                                   "type":  "string"
+                                                                                                               }
+                                                                                                           ],
+                                                                                                 "title":  "Hra",
+                                                                                                 "default":  0
+                                                                                             },
+                                                                                     "special_allowance":  {
+                                                                                                               "anyOf":  [
+                                                                                                                             {
+                                                                                                                                 "type":  "number",
+                                                                                                                                 "minimum":  0.0
+                                                                                                                             },
+                                                                                                                             {
+                                                                                                                                 "type":  "string"
+                                                                                                                             }
+                                                                                                                         ],
+                                                                                                               "title":  "Special Allowance",
+                                                                                                               "default":  0
+                                                                                                           },
+                                                                                     "pf_percentage":  {
+                                                                                                           "anyOf":  [
+                                                                                                                         {
+                                                                                                                             "type":  "number",
+                                                                                                                             "maximum":  100.0,
+                                                                                                                             "minimum":  0.0
+                                                                                                                         },
+                                                                                                                         {
+                                                                                                                             "type":  "string"
+                                                                                                                         }
+                                                                                                                     ],
+                                                                                                           "title":  "Pf Percentage",
+                                                                                                           "default":  0
+                                                                                                       },
+                                                                                     "professional_tax":  {
+                                                                                                              "anyOf":  [
+                                                                                                                            {
+                                                                                                                                "type":  "number",
+                                                                                                                                "minimum":  0.0
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "type":  "string"
+                                                                                                                            }
+                                                                                                                        ],
+                                                                                                              "title":  "Professional Tax",
+                                                                                                              "default":  0
+                                                                                                          },
+                                                                                     "tds":  {
+                                                                                                 "anyOf":  [
+                                                                                                               {
+                                                                                                                   "type":  "number",
+                                                                                                                   "minimum":  0.0
+                                                                                                               },
+                                                                                                               {
+                                                                                                                   "type":  "string"
+                                                                                                               }
+                                                                                                           ],
+                                                                                                 "title":  "Tds",
+                                                                                                 "default":  0
+                                                                                             },
+                                                                                     "effective_from":  {
+                                                                                                            "type":  "string",
+                                                                                                            "format":  "date",
+                                                                                                            "title":  "Effective From"
+                                                                                                        }
+                                                                                 },
+                                                                  "type":  "object",
+                                                                  "required":  [
+                                                                                   "basic_salary",
+                                                                                   "effective_from"
+                                                                               ],
+                                                                  "title":  "BaseCompensationIn"
+                                                              },
                                        "Body_upload_document_api_employees__employee_id__documents_post":  {
                                                                                                                "properties":  {
                                                                                                                                   "file":  {
@@ -2347,6 +3447,102 @@
                                                                                                                             ],
                                                                                                                "title":  "Body_upload_document_api_employees__employee_id__documents_post"
                                                                                                            },
+                                       "BroadcastIn":  {
+                                                           "properties":  {
+                                                                              "title":  {
+                                                                                            "type":  "string",
+                                                                                            "maxLength":  255,
+                                                                                            "minLength":  2,
+                                                                                            "title":  "Title"
+                                                                                        },
+                                                                              "message":  {
+                                                                                              "type":  "string",
+                                                                                              "maxLength":  4000,
+                                                                                              "minLength":  2,
+                                                                                              "title":  "Message"
+                                                                                          },
+                                                                              "department_ids":  {
+                                                                                                     "anyOf":  [
+                                                                                                                   {
+                                                                                                                       "items":  {
+                                                                                                                                     "type":  "integer"
+                                                                                                                                 },
+                                                                                                                       "type":  "array"
+                                                                                                                   },
+                                                                                                                   {
+                                                                                                                       "type":  "null"
+                                                                                                                   }
+                                                                                                               ],
+                                                                                                     "title":  "Department Ids"
+                                                                                                 }
+                                                                          },
+                                                           "type":  "object",
+                                                           "required":  [
+                                                                            "title",
+                                                                            "message"
+                                                                        ],
+                                                           "title":  "BroadcastIn"
+                                                       },
+                                       "DepartmentCreate":  {
+                                                                "properties":  {
+                                                                                   "name":  {
+                                                                                                "type":  "string",
+                                                                                                "maxLength":  120,
+                                                                                                "minLength":  2,
+                                                                                                "title":  "Name"
+                                                                                            }
+                                                                               },
+                                                                "type":  "object",
+                                                                "required":  [
+                                                                                 "name"
+                                                                             ],
+                                                                "title":  "DepartmentCreate"
+                                                            },
+                                       "EmployeeComponentIn":  {
+                                                                   "properties":  {
+                                                                                      "component_id":  {
+                                                                                                           "type":  "integer",
+                                                                                                           "minimum":  1.0,
+                                                                                                           "title":  "Component Id"
+                                                                                                       },
+                                                                                      "monthly_amount":  {
+                                                                                                             "anyOf":  [
+                                                                                                                           {
+                                                                                                                               "type":  "number",
+                                                                                                                               "minimum":  0.0
+                                                                                                                           },
+                                                                                                                           {
+                                                                                                                               "type":  "string"
+                                                                                                                           }
+                                                                                                                       ],
+                                                                                                             "title":  "Monthly Amount"
+                                                                                                         },
+                                                                                      "effective_from":  {
+                                                                                                             "type":  "string",
+                                                                                                             "format":  "date",
+                                                                                                             "title":  "Effective From"
+                                                                                                         },
+                                                                                      "effective_to":  {
+                                                                                                           "anyOf":  [
+                                                                                                                         {
+                                                                                                                             "type":  "string",
+                                                                                                                             "format":  "date"
+                                                                                                                         },
+                                                                                                                         {
+                                                                                                                             "type":  "null"
+                                                                                                                         }
+                                                                                                                     ],
+                                                                                                           "title":  "Effective To"
+                                                                                                       }
+                                                                                  },
+                                                                   "type":  "object",
+                                                                   "required":  [
+                                                                                    "component_id",
+                                                                                    "monthly_amount",
+                                                                                    "effective_from"
+                                                                                ],
+                                                                   "title":  "EmployeeComponentIn"
+                                                               },
                                        "EmployeeCreate":  {
                                                               "properties":  {
                                                                                  "email":  {
@@ -2575,6 +3771,85 @@
                                                                            ],
                                                               "title":  "EmployeeCreate"
                                                           },
+                                       "EmployeeSelfProfileUpdate":  {
+                                                                         "properties":  {
+                                                                                            "phone":  {
+                                                                                                          "anyOf":  [
+                                                                                                                        {
+                                                                                                                            "type":  "string",
+                                                                                                                            "maxLength":  30
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "type":  "null"
+                                                                                                                        }
+                                                                                                                    ],
+                                                                                                          "title":  "Phone"
+                                                                                                      },
+                                                                                            "date_of_birth":  {
+                                                                                                                  "anyOf":  [
+                                                                                                                                {
+                                                                                                                                    "type":  "string",
+                                                                                                                                    "format":  "date"
+                                                                                                                                },
+                                                                                                                                {
+                                                                                                                                    "type":  "null"
+                                                                                                                                }
+                                                                                                                            ],
+                                                                                                                  "title":  "Date Of Birth"
+                                                                                                              },
+                                                                                            "address":  {
+                                                                                                            "anyOf":  [
+                                                                                                                          {
+                                                                                                                              "type":  "string",
+                                                                                                                              "maxLength":  2000
+                                                                                                                          },
+                                                                                                                          {
+                                                                                                                              "type":  "null"
+                                                                                                                          }
+                                                                                                                      ],
+                                                                                                            "title":  "Address"
+                                                                                                        },
+                                                                                            "emergency_contact_name":  {
+                                                                                                                           "anyOf":  [
+                                                                                                                                         {
+                                                                                                                                             "type":  "string",
+                                                                                                                                             "maxLength":  160
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "type":  "null"
+                                                                                                                                         }
+                                                                                                                                     ],
+                                                                                                                           "title":  "Emergency Contact Name"
+                                                                                                                       },
+                                                                                            "emergency_contact_relationship":  {
+                                                                                                                                   "anyOf":  [
+                                                                                                                                                 {
+                                                                                                                                                     "type":  "string",
+                                                                                                                                                     "maxLength":  80
+                                                                                                                                                 },
+                                                                                                                                                 {
+                                                                                                                                                     "type":  "null"
+                                                                                                                                                 }
+                                                                                                                                             ],
+                                                                                                                                   "title":  "Emergency Contact Relationship"
+                                                                                                                               },
+                                                                                            "emergency_contact_phone":  {
+                                                                                                                            "anyOf":  [
+                                                                                                                                          {
+                                                                                                                                              "type":  "string",
+                                                                                                                                              "maxLength":  30
+                                                                                                                                          },
+                                                                                                                                          {
+                                                                                                                                              "type":  "null"
+                                                                                                                                          }
+                                                                                                                                      ],
+                                                                                                                            "title":  "Emergency Contact Phone"
+                                                                                                                        }
+                                                                                        },
+                                                                         "additionalProperties":  false,
+                                                                         "type":  "object",
+                                                                         "title":  "EmployeeSelfProfileUpdate"
+                                                                     },
                                        "EmployeeUpdate":  {
                                                               "properties":  {
                                                                                  "email":  {
@@ -2870,7 +4145,34 @@
                                                                                              "maxLength":  120,
                                                                                              "minLength":  2,
                                                                                              "title":  "Name"
-                                                                                         }
+                                                                                         },
+                                                                                "scope":  {
+                                                                                              "type":  "string",
+                                                                                              "enum":  [
+                                                                                                           "company",
+                                                                                                           "regional",
+                                                                                                           "optional"
+                                                                                                       ],
+                                                                                              "title":  "Scope",
+                                                                                              "default":  "company"
+                                                                                          },
+                                                                                "department_id":  {
+                                                                                                      "anyOf":  [
+                                                                                                                    {
+                                                                                                                        "type":  "integer",
+                                                                                                                        "minimum":  1.0
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "type":  "null"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                      "title":  "Department Id"
+                                                                                                  },
+                                                                                "is_optional":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "title":  "Is Optional",
+                                                                                                    "default":  false
+                                                                                                }
                                                                             },
                                                              "type":  "object",
                                                              "required":  [
@@ -2978,6 +4280,33 @@
                                                                     ],
                                                        "title":  "LoginIn"
                                                    },
+                                       "NotificationPreferenceIn":  {
+                                                                        "properties":  {
+                                                                                           "event_type":  {
+                                                                                                              "type":  "string",
+                                                                                                              "enum":  [
+                                                                                                                           "employee_onboarding",
+                                                                                                                           "leave_application",
+                                                                                                                           "leave_decision",
+                                                                                                                           "payroll_generated",
+                                                                                                                           "payroll_credit_simulated",
+                                                                                                                           "attendance_alert",
+                                                                                                                           "admin_announcement"
+                                                                                                                       ],
+                                                                                                              "title":  "Event Type"
+                                                                                                          },
+                                                                                           "enabled":  {
+                                                                                                           "type":  "boolean",
+                                                                                                           "title":  "Enabled"
+                                                                                                       }
+                                                                                       },
+                                                                        "type":  "object",
+                                                                        "required":  [
+                                                                                         "event_type",
+                                                                                         "enabled"
+                                                                                     ],
+                                                                        "title":  "NotificationPreferenceIn"
+                                                                    },
                                        "PayrollAdjustmentCreate":  {
                                                                        "properties":  {
                                                                                           "amount":  {
@@ -3057,6 +4386,148 @@
                                                                        ],
                                                           "title":  "RegisterIn"
                                                       },
+                                       "SalaryComponentIn":  {
+                                                                 "properties":  {
+                                                                                    "name":  {
+                                                                                                 "type":  "string",
+                                                                                                 "maxLength":  100,
+                                                                                                 "minLength":  2,
+                                                                                                 "title":  "Name"
+                                                                                             },
+                                                                                    "component_type":  {
+                                                                                                           "type":  "string",
+                                                                                                           "pattern":  "^(earning|deduction)$",
+                                                                                                           "title":  "Component Type"
+                                                                                                       },
+                                                                                    "is_variable":  {
+                                                                                                        "type":  "boolean",
+                                                                                                        "title":  "Is Variable",
+                                                                                                        "default":  false
+                                                                                                    }
+                                                                                },
+                                                                 "type":  "object",
+                                                                 "required":  [
+                                                                                  "name",
+                                                                                  "component_type"
+                                                                              ],
+                                                                 "title":  "SalaryComponentIn"
+                                                             },
+                                       "ShiftAssignmentIn":  {
+                                                                 "properties":  {
+                                                                                    "shift_id":  {
+                                                                                                     "type":  "integer",
+                                                                                                     "minimum":  1.0,
+                                                                                                     "title":  "Shift Id"
+                                                                                                 },
+                                                                                    "employee_id":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "integer",
+                                                                                                                          "minimum":  1.0
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Employee Id"
+                                                                                                    },
+                                                                                    "department_id":  {
+                                                                                                          "anyOf":  [
+                                                                                                                        {
+                                                                                                                            "type":  "integer",
+                                                                                                                            "minimum":  1.0
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "type":  "null"
+                                                                                                                        }
+                                                                                                                    ],
+                                                                                                          "title":  "Department Id"
+                                                                                                      },
+                                                                                    "effective_from":  {
+                                                                                                           "type":  "string",
+                                                                                                           "format":  "date",
+                                                                                                           "title":  "Effective From"
+                                                                                                       },
+                                                                                    "effective_to":  {
+                                                                                                         "anyOf":  [
+                                                                                                                       {
+                                                                                                                           "type":  "string",
+                                                                                                                           "format":  "date"
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "type":  "null"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                         "title":  "Effective To"
+                                                                                                     }
+                                                                                },
+                                                                 "type":  "object",
+                                                                 "required":  [
+                                                                                  "shift_id",
+                                                                                  "effective_from"
+                                                                              ],
+                                                                 "title":  "ShiftAssignmentIn"
+                                                             },
+                                       "ShiftIn":  {
+                                                       "properties":  {
+                                                                          "name":  {
+                                                                                       "type":  "string",
+                                                                                       "maxLength":  100,
+                                                                                       "minLength":  2,
+                                                                                       "title":  "Name"
+                                                                                   },
+                                                                          "shift_type":  {
+                                                                                             "type":  "string",
+                                                                                             "pattern":  "^(general|night|flexible|remote)$",
+                                                                                             "title":  "Shift Type"
+                                                                                         },
+                                                                          "start_time":  {
+                                                                                             "type":  "string",
+                                                                                             "format":  "time",
+                                                                                             "title":  "Start Time"
+                                                                                         },
+                                                                          "end_time":  {
+                                                                                           "type":  "string",
+                                                                                           "format":  "time",
+                                                                                           "title":  "End Time"
+                                                                                       },
+                                                                          "grace_minutes":  {
+                                                                                                "type":  "integer",
+                                                                                                "maximum":  240.0,
+                                                                                                "minimum":  0.0,
+                                                                                                "title":  "Grace Minutes",
+                                                                                                "default":  0
+                                                                                            },
+                                                                          "expected_minutes":  {
+                                                                                                   "type":  "integer",
+                                                                                                   "maximum":  1440.0,
+                                                                                                   "minimum":  1.0,
+                                                                                                   "title":  "Expected Minutes",
+                                                                                                   "default":  480
+                                                                                               }
+                                                                      },
+                                                       "type":  "object",
+                                                       "required":  [
+                                                                        "name",
+                                                                        "shift_type",
+                                                                        "start_time",
+                                                                        "end_time"
+                                                                    ],
+                                                       "title":  "ShiftIn"
+                                                   },
+                                       "ShiftStatusIn":  {
+                                                             "properties":  {
+                                                                                "is_active":  {
+                                                                                                  "type":  "boolean",
+                                                                                                  "title":  "Is Active"
+                                                                                              }
+                                                                            },
+                                                             "type":  "object",
+                                                             "required":  [
+                                                                              "is_active"
+                                                                          ],
+                                                             "title":  "ShiftStatusIn"
+                                                         },
                                        "UserCreate":  {
                                                           "properties":  {
                                                                              "email":  {

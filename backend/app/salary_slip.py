@@ -374,7 +374,11 @@ def generate_salary_slip_pdf(
     basic_salary = Decimal(payroll.basic_salary or 0)
     hra = Decimal(payroll.hra or 0)
     special_allowance = Decimal(payroll.special_allowance or 0)
-    if basic_salary + hra + special_allowance == Decimal(payroll.gross_salary):
+    stored_earnings = payroll.earnings_breakdown or {}
+    stored_deductions = payroll.deductions_breakdown or {}
+    if stored_earnings:
+        earnings = [(name, Decimal(str(amount))) for name, amount in stored_earnings.items()]
+    elif basic_salary + hra + special_allowance == Decimal(payroll.gross_salary):
         earnings = [
             ("Basic salary", basic_salary),
             ("House rent allowance", hra),
@@ -385,20 +389,26 @@ def generate_salary_slip_pdf(
     earnings.extend(
         (f"Adjustment · {item.reason}", item.amount) for item in positive_adjustments
     )
-    deductions = [
-        (f"Loss of pay · {lop_days:f} {lop_day_label}", payroll.lop_deduction),
-        ("Provident fund", Decimal(payroll.pf_deduction or 0)),
-        ("Professional tax", Decimal(payroll.professional_tax or 0)),
-        ("TDS", Decimal(payroll.tds_deduction or 0)),
-    ]
-    other_deduction_balance = (
-        Decimal(payroll.other_deductions or 0)
-        - Decimal(payroll.pf_deduction or 0)
-        - Decimal(payroll.professional_tax or 0)
-        - Decimal(payroll.tds_deduction or 0)
-    )
-    if other_deduction_balance > 0:
-        deductions.append(("Other deductions", other_deduction_balance))
+    deductions = [(f"Loss of pay · {lop_days:f} {lop_day_label}", payroll.lop_deduction)]
+    if stored_deductions:
+        deductions.extend(
+            (name, Decimal(str(amount))) for name, amount in stored_deductions.items()
+            if Decimal(str(amount)) != 0
+        )
+    else:
+        deductions.extend([
+            ("Provident fund", Decimal(payroll.pf_deduction or 0)),
+            ("Professional tax", Decimal(payroll.professional_tax or 0)),
+            ("TDS", Decimal(payroll.tds_deduction or 0)),
+        ])
+        other_deduction_balance = (
+            Decimal(payroll.other_deductions or 0)
+            - Decimal(payroll.pf_deduction or 0)
+            - Decimal(payroll.professional_tax or 0)
+            - Decimal(payroll.tds_deduction or 0)
+        )
+        if other_deduction_balance > 0:
+            deductions.append(("Other deductions", other_deduction_balance))
     deductions.extend(
         (f"Adjustment · {item.reason}", abs(item.amount)) for item in negative_adjustments
     )

@@ -35,12 +35,31 @@ def upgrade_legacy_schema():
             "working_days": "NUMERIC(6, 2) NOT NULL DEFAULT 0",
             "payable_days": "NUMERIC(6, 2) NOT NULL DEFAULT 0",
             "credit_reference": "VARCHAR(40)",
+            "overtime_minutes": "INTEGER NOT NULL DEFAULT 0",
+            "overtime_pay": "NUMERIC(12, 2) NOT NULL DEFAULT 0",
+            "earnings_breakdown": "TEXT NOT NULL DEFAULT '{}'",
+            "deductions_breakdown": "TEXT NOT NULL DEFAULT '{}'",
+        },
+        "attendance": {
+            "shift_id": "INTEGER",
+            "late_minutes": "INTEGER NOT NULL DEFAULT 0",
+            "early_checkout_minutes": "INTEGER NOT NULL DEFAULT 0",
+            "overtime_minutes": "INTEGER NOT NULL DEFAULT 0",
         },
         "leave_requests": {
             "review_note": "TEXT",
         },
     }
     with engine.begin() as connection:
+        holiday_indexes = {index["name"] for index in inspect(connection).get_indexes("holidays")}
+        if "ix_holidays_holiday_date" in holiday_indexes:
+            if connection.dialect.name == "mysql":
+                connection.exec_driver_sql("DROP INDEX ix_holidays_holiday_date ON holidays")
+            else:
+                connection.exec_driver_sql("DROP INDEX ix_holidays_holiday_date")
+            connection.exec_driver_sql(
+                "CREATE INDEX ix_holidays_holiday_date ON holidays (holiday_date)"
+            )
         for table_name, columns in migrations.items():
             existing = {column["name"] for column in inspect(connection).get_columns(table_name)}
             added_columns = set()
@@ -61,6 +80,27 @@ def upgrade_legacy_schema():
                     "UPDATE payroll SET basic_salary = gross_salary "
                     "WHERE gross_salary > 0 AND hra = 0 AND special_allowance = 0"
                 ))
+        holiday_columns = {column["name"] for column in inspect(connection).get_columns("holidays")}
+        for column_name, column_definition in {
+            "scope": "VARCHAR(20) NOT NULL DEFAULT 'company'",
+            "department_id": "INTEGER",
+            "is_optional": "BOOLEAN NOT NULL DEFAULT FALSE",
+        }.items():
+            if column_name not in holiday_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE holidays ADD COLUMN {column_name} {column_definition}"
+                )
+        for table_name, index_name, column_name in (
+            ("holidays", "ix_holidays_department_id", "department_id"),
+            ("attendance", "ix_attendance_shift_id", "shift_id"),
+        ):
+            index_names = {
+                index["name"] for index in inspect(connection).get_indexes(table_name)
+            }
+            if index_name not in index_names:
+                connection.exec_driver_sql(
+                    f"CREATE INDEX {index_name} ON {table_name} ({column_name})"
+                )
 
 def get_db():
     db = SessionLocal()

@@ -11,13 +11,14 @@ from sqlalchemy.exc import IntegrityError
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from .config import settings
-from .notifications import send_notification
+from .notifications import EMAIL_TEMPLATES, send_notification
 from .database import Base, engine, get_db, upgrade_legacy_schema
-from .models import AuthSession, User, Department, Employee, EmployeeDocument, Attendance, Holiday, LeaveType, LeaveBalance, LeaveRequest, Payroll, PayrollAdjustment, NotificationLog, AuditLog
+from .models import AuthSession, User, Department, Employee, EmployeeDocument, Attendance, Holiday, LeaveType, LeaveBalance, LeaveRequest, Payroll, PayrollAdjustment, NotificationLog, AuditLog, InAppNotification, NotificationPreference, Shift, ShiftAssignment, SalaryComponent, EmployeeSalaryComponent, EmployeeCompensation
 from .salary_slip import generate_salary_slip_pdf
-from .schemas import LoginIn, RegisterIn, EmployeeCreate, EmployeeUpdate, AttendanceCorrection, LeaveApply, LeaveDecision, LeaveTypeCreate, HolidayCreate, PayrollGenerate, PayrollAdjustmentCreate, UserCreate, UserRoleUpdate
+from .schemas import LoginIn, RegisterIn, EmployeeCreate, EmployeeUpdate, EmployeeSelfProfileUpdate, AttendanceCorrection, LeaveApply, LeaveDecision, LeaveTypeCreate, DepartmentCreate, HolidayCreate, PayrollGenerate, PayrollAdjustmentCreate, UserCreate, UserRoleUpdate
 from .security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from .dependencies import current_user, current_employee, require_roles
+from .phase_two import employee_compensation_values, record_compensation_revision, router as phase_two_router
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
@@ -47,10 +48,72 @@ def working_days_between(start_date: date, end_date: date, holiday_dates: set[da
     return total
 
 
-def attendance_status_for_minutes(minutes: int) -> str:
-    if minutes >= 8 * 60:
+def applicable_holiday_dates(db: Session, start_date: date, end_date: date, department_id: int | None) -> set[date]:
+    query = db.query(Holiday.holiday_date).filter(
+        Holiday.holiday_date.between(start_date, end_date),
+        Holiday.is_optional.is_(False),
+    )
+    if department_id is None:
+        query = query.filter(Holiday.department_id.is_(None))
+    else:
+        query = query.filter(
+            (Holiday.department_id.is_(None)) | (Holiday.department_id == department_id)
+        )
+    return {row[0] for row in query.all()}
+
+
+def shift_for_employee(db: Session, employee: Employee, work_date: date):
+    date_filter = (
+        ShiftAssignment.effective_from <= work_date,
+        (ShiftAssignment.effective_to.is_(None)) | (ShiftAssignment.effective_to >= work_date),
+    )
+    assignment = db.query(ShiftAssignment, Shift).join(
+        Shift, Shift.id == ShiftAssignment.shift_id
+    ).filter(
+        ShiftAssignment.employee_id == employee.id,
+        *date_filter,
+    ).order_by(ShiftAssignment.effective_from.desc()).first()
+    if assignment:
+        return assignment[1]
+    if employee.department_id is not None:
+        assignment = db.query(ShiftAssignment, Shift).join(
+            Shift, Shift.id == ShiftAssignment.shift_id
+        ).filter(
+            ShiftAssignment.department_id == employee.department_id,
+            *date_filter,
+        ).order_by(ShiftAssignment.effective_from.desc()).first()
+        if assignment:
+            return assignment[1]
+    return None
+
+
+def attendance_shift_metrics(shift: Shift | None, check_in: datetime | None, check_out: datetime | None):
+    if shift is None:
+        return 0, 0, 0
+    late_minutes = 0
+    early_minutes = 0
+    overtime_minutes = 0
+    scheduled_end = None
+    if check_in is not None:
+        scheduled_start = datetime.combine(check_in.date(), shift.start_time)
+        late_minutes = max(
+            0,
+            int((check_in - scheduled_start).total_seconds() // 60) - shift.grace_minutes,
+        )
+        scheduled_end_date = check_in.date()
+        if shift.end_time <= shift.start_time:
+            scheduled_end_date += timedelta(days=1)
+        scheduled_end = datetime.combine(scheduled_end_date, shift.end_time)
+    if check_in is not None and check_out is not None and scheduled_end is not None:
+        early_minutes = max(0, int((scheduled_end - check_out).total_seconds() // 60))
+        overtime_minutes = max(0, int((check_out - scheduled_end).total_seconds() // 60))
+    return late_minutes, early_minutes, overtime_minutes
+
+
+def attendance_status_for_minutes(minutes: int, expected_minutes: int = 8 * 60) -> str:
+    if minutes >= expected_minutes:
         return "present"
-    if minutes >= 4 * 60:
+    if minutes >= expected_minutes / 2:
         return "half_day"
     return "absent"
 
@@ -59,6 +122,19 @@ def audit(db, actor, action, entity, entity_id=None, details=None):
     db.add(AuditLog(actor_user_id=actor.id if actor else None, action=action, entity_type=entity, entity_id=str(entity_id) if entity_id is not None else None, details=details))
 def log_notification(db, recipient, event_type, context):
     send_notification(db, recipient, event_type, **context)
+    user = db.query(User).filter(func.lower(User.email) == recipient.lower()).first()
+    if user:
+        preference = db.query(NotificationPreference).filter_by(
+            user_id=user.id, event_type=event_type
+        ).first()
+        if preference is None or preference.enabled:
+            subject_template, body_template = EMAIL_TEMPLATES[event_type]
+            db.add(InAppNotification(
+                user_id=user.id,
+                event_type=event_type,
+                title=subject_template.format_map(context),
+                message=body_template.format_map(context).strip(),
+            ))
 
 def utc_now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -321,7 +397,15 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db), acto
             emergency_contact_relationship=payload.emergency_contact_relationship,
             emergency_contact_phone=payload.emergency_contact_phone,
         )
-        db.add(employee); db.flush(); seed_employee_leave_balances(db, employee.id); audit(db, actor, "employee.created", "employee", employee.id); log_notification(db, email, "employee_onboarding", {"full_name": employee.full_name})
+        db.add(employee)
+        db.flush()
+        record_compensation_revision(
+            db, employee, actor, employee.joining_date,
+            employee_compensation_values(employee),
+        )
+        seed_employee_leave_balances(db, employee.id)
+        audit(db, actor, "employee.created", "employee", employee.id)
+        log_notification(db, email, "employee_onboarding", {"full_name": employee.full_name})
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -392,6 +476,7 @@ def employee_directory(db: Session = Depends(get_db), actor: User = Depends(curr
             "designation": employee.designation,
             "role": employee.user.role,
             "is_active": employee.is_active,
+            "is_self": employee.user_id == actor.id,
         }
         for employee in employees
     ]
@@ -400,19 +485,52 @@ def employee_directory(db: Session = Depends(get_db), actor: User = Depends(curr
 def list_departments(db: Session = Depends(get_db), actor: User = Depends(current_user)):
     return [{"id": department.id, "name": department.name} for department in db.query(Department).order_by(Department.name).all()]
 
+@app.post("/api/departments", status_code=201)
+def create_department(payload: DepartmentCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "hr"))):
+    existing = db.query(Department).filter(func.lower(Department.name) == payload.name.lower()).first()
+    if existing:
+        raise HTTPException(409, "A department with this name already exists")
+    department = Department(name=payload.name)
+    db.add(department)
+    try:
+        db.flush()
+        audit(db, actor, "department.created", "department", department.id, f"name={department.name}")
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "A department with this name already exists") from exc
+    return {"id": department.id, "name": department.name}
+
 @app.get("/api/holidays")
 def list_holidays(year: int | None = Query(default=None, ge=2000, le=2100), db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "hr"))):
     query = db.query(Holiday)
     if year is not None:
         query = query.filter(Holiday.holiday_date >= date(year, 1, 1), Holiday.holiday_date < date(year + 1, 1, 1))
     return [
-        {"id": holiday.id, "holiday_date": holiday.holiday_date, "name": holiday.name}
+        {"id": holiday.id, "holiday_date": holiday.holiday_date, "name": holiday.name,
+         "scope": holiday.scope, "department_id": holiday.department_id,
+         "is_optional": holiday.is_optional}
         for holiday in query.order_by(Holiday.holiday_date, Holiday.name).all()
     ]
 
 @app.post("/api/holidays", status_code=201)
 def create_holiday(payload: HolidayCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin"))):
-    holiday = Holiday(holiday_date=payload.holiday_date, name=payload.name)
+    if payload.department_id is not None and not db.query(Department).filter_by(id=payload.department_id).first():
+        raise HTTPException(422, "Department not found")
+    duplicate = db.query(Holiday).filter_by(
+        holiday_date=payload.holiday_date,
+        scope=payload.scope,
+        department_id=payload.department_id,
+    ).first()
+    if duplicate:
+        raise HTTPException(409, "This holiday is already registered")
+    holiday = Holiday(
+        holiday_date=payload.holiday_date,
+        name=payload.name,
+        scope=payload.scope,
+        department_id=payload.department_id,
+        is_optional=payload.is_optional,
+    )
     try:
         db.add(holiday)
         db.flush()
@@ -422,7 +540,9 @@ def create_holiday(payload: HolidayCreate, db: Session = Depends(get_db), actor:
         db.rollback()
         raise HTTPException(409, "A holiday is already registered for this date")
     db.refresh(holiday)
-    return {"id": holiday.id, "holiday_date": holiday.holiday_date, "name": holiday.name}
+    return {"id": holiday.id, "holiday_date": holiday.holiday_date, "name": holiday.name,
+            "scope": holiday.scope, "department_id": holiday.department_id,
+            "is_optional": holiday.is_optional}
 
 @app.delete("/api/holidays/{holiday_id}", status_code=204)
 def delete_holiday(holiday_id: int, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin"))):
@@ -438,6 +558,21 @@ def delete_holiday(holiday_id: int, db: Session = Depends(get_db), actor: User =
 def my_profile(employee: Employee = Depends(current_employee), user: User = Depends(current_user)):
     return employee_dict(employee, user)
 
+@app.patch("/api/employees/me/profile")
+def update_my_profile(
+    payload: EmployeeSelfProfileUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+    employee: Employee = Depends(current_employee),
+):
+    changes = payload.model_dump(exclude_unset=True)
+    for key, value in changes.items():
+        setattr(employee, key, value)
+    audit(db, actor, "employee.self_profile_updated", "employee", employee.id)
+    db.commit()
+    db.refresh(employee)
+    return employee_dict(employee, actor)
+
 @app.get("/api/employees/{employee_id}")
 def get_employee(employee_id: int, db: Session = Depends(get_db), actor: User = Depends(current_user)):
     e = db.query(Employee).filter_by(id=employee_id).first()
@@ -450,6 +585,7 @@ def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Dep
     e = db.query(Employee).filter_by(id=employee_id).first()
     if not e: raise HTTPException(404, "Employee not found")
     changes = payload.model_dump(exclude_unset=True)
+    previous_compensation = employee_compensation_values(e)
     salary_component_names = ("basic_salary", "hra", "special_allowance")
     components_changed = any(name in changes for name in salary_component_names)
     if components_changed:
@@ -481,6 +617,14 @@ def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Dep
     was_active = e.is_active
     for key, value in changes.items():
         setattr(e, key, value)
+    if set(changes).intersection({
+        "monthly_salary", "basic_salary", "hra", "special_allowance",
+        "pf_percentage", "professional_tax", "tds",
+    }):
+        record_compensation_revision(
+            db, e, actor, date.today(), employee_compensation_values(e),
+            previous_compensation,
+        )
     if "is_active" in changes:
         e.user.is_active = e.is_active
         if was_active and not e.is_active:
@@ -580,17 +724,22 @@ def check_in(db: Session = Depends(get_db), employee: Employee = Depends(current
     today = date.today(); row = db.query(Attendance).filter_by(employee_id=employee.id, work_date=today).first()
     if row and row.check_in: raise HTTPException(409, "Already checked in today")
     check_in_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    shift = shift_for_employee(db, employee, today)
+    late_minutes, _, _ = attendance_shift_metrics(shift, check_in_at, None)
     if row is not None:
         changed = db.execute(
             update(Attendance)
             .where(Attendance.id == row.id, Attendance.check_in.is_(None))
-            .values(check_in=check_in_at, status="present")
+            .values(check_in=check_in_at, status="present", shift_id=shift.id if shift else None,
+                    late_minutes=late_minutes)
         )
         if changed.rowcount != 1:
             db.rollback()
             raise HTTPException(409, "Already checked in today")
     else:
-        row = Attendance(employee_id=employee.id, work_date=today, check_in=check_in_at, status="present")
+        row = Attendance(employee_id=employee.id, work_date=today, check_in=check_in_at,
+                         status="present", shift_id=shift.id if shift else None,
+                         late_minutes=late_minutes)
         db.add(row)
         try:
             db.flush()
@@ -598,6 +747,10 @@ def check_in(db: Session = Depends(get_db), employee: Employee = Depends(current
             db.rollback()
             raise HTTPException(409, "Already checked in today")
     audit(db, user, "attendance.check_in", "attendance", row.id, f"work_date={today.isoformat()}")
+    if late_minutes:
+        log_notification(db, user.email, "attendance_alert", {
+            "message": f"You checked in {late_minutes} minutes after your shift start.",
+        })
     db.commit()
     db.refresh(row)
     return attendance_dict(row)
@@ -611,6 +764,11 @@ def attendance_dict(a, employee=None):
         "check_out": a.check_out.replace(tzinfo=timezone.utc).isoformat() if a.check_out else None,
         "working_minutes": a.working_minutes,
         "status": a.status,
+        "shift_id": a.shift_id,
+        "shift_name": a.shift.name if a.shift else None,
+        "late_minutes": a.late_minutes,
+        "early_checkout_minutes": a.early_checkout_minutes,
+        "overtime_minutes": a.overtime_minutes,
     }
     if employee is not None:
         result["employee_name"] = employee.full_name
@@ -619,21 +777,47 @@ def attendance_dict(a, employee=None):
 
 @app.post("/api/attendance/check-out")
 def check_out(db: Session = Depends(get_db), employee: Employee = Depends(current_employee), actor: User = Depends(current_user)):
-    row = db.query(Attendance).filter_by(employee_id=employee.id, work_date=date.today()).first()
+    today = date.today()
+    row = db.query(Attendance).filter_by(
+        employee_id=employee.id, work_date=today
+    ).first()
+    if row is None:
+        prior = db.query(Attendance).filter_by(
+            employee_id=employee.id, work_date=today - timedelta(days=1)
+        ).filter(Attendance.check_out.is_(None)).first()
+        prior_shift = db.query(Shift).filter_by(id=prior.shift_id).first() if prior and prior.shift_id else None
+        if prior_shift and prior_shift.end_time <= prior_shift.start_time:
+            row = prior
     if not row or not row.check_in: raise HTTPException(409, "Check in before checking out")
     if row.check_out: raise HTTPException(409, "Already checked out today")
     checked_out_at = datetime.now(timezone.utc).replace(tzinfo=None)
     working_minutes = max(0, int((checked_out_at - row.check_in).total_seconds() // 60))
-    status = attendance_status_for_minutes(working_minutes)
+    shift = db.query(Shift).filter_by(id=row.shift_id).first() if row.shift_id else None
+    status = attendance_status_for_minutes(
+        working_minutes, shift.expected_minutes if shift else 8 * 60
+    )
+    _, early_minutes, overtime_minutes = attendance_shift_metrics(
+        shift, row.check_in, checked_out_at
+    )
     changed = db.execute(
         update(Attendance)
         .where(Attendance.id == row.id, Attendance.check_in.is_not(None), Attendance.check_out.is_(None))
-        .values(check_out=checked_out_at, working_minutes=working_minutes, status=status)
+        .values(check_out=checked_out_at, working_minutes=working_minutes, status=status,
+                early_checkout_minutes=early_minutes, overtime_minutes=overtime_minutes)
     )
     if changed.rowcount != 1:
         db.rollback()
         raise HTTPException(409, "Already checked out today")
     audit(db, actor, "attendance.check_out", "attendance", row.id, f"work_date={row.work_date.isoformat()}; working_minutes={working_minutes}")
+    if early_minutes or overtime_minutes:
+        messages = []
+        if early_minutes:
+            messages.append(f"early checkout: {early_minutes} minutes")
+        if overtime_minutes:
+            messages.append(f"overtime: {overtime_minutes} minutes")
+        log_notification(db, actor.email, "attendance_alert", {
+            "message": "Attendance alert — " + "; ".join(messages) + ".",
+        })
     db.commit()
     row = db.query(Attendance).filter_by(id=row.id).one()
     db.refresh(row)
@@ -646,14 +830,15 @@ def my_attendance(month: int = Query(default=date.today().month, ge=1, le=12), y
     month_end = next_month - timedelta(days=1)
     elapsed_end = min(month_end, date.today())
     holidays = set()
+    holiday_rows = []
     if elapsed_end >= month_start:
-        holidays = {
-            row[0]
-            for row in db.query(Holiday.holiday_date).filter(
-                Holiday.holiday_date >= month_start,
-                Holiday.holiday_date <= elapsed_end,
-            ).all()
-        }
+        holidays = applicable_holiday_dates(db, month_start, elapsed_end, employee.department_id)
+    if month_end >= month_start:
+        holiday_rows = db.query(Holiday).filter(
+            Holiday.holiday_date >= month_start,
+            Holiday.holiday_date <= month_end,
+            (Holiday.department_id.is_(None)) | (Holiday.department_id == employee.department_id),
+        ).order_by(Holiday.holiday_date).all()
     rows = db.query(Attendance).filter(Attendance.employee_id == employee.id, Attendance.work_date >= month_start, Attendance.work_date < next_month).order_by(Attendance.work_date.desc()).all()
     return {
         "records": [attendance_dict(a) for a in rows],
@@ -663,6 +848,8 @@ def my_attendance(month: int = Query(default=date.today().month, ge=1, le=12), y
         "days_on_leave": sum(1 for a in rows if a.status == "on_leave"),
         "days_absent": sum(1 for a in rows if a.status == "absent"),
         "total_working_minutes": sum(a.working_minutes for a in rows),
+        "holiday_count": len({holiday.holiday_date for holiday in holiday_rows}),
+        "holidays": [{"date": row.holiday_date, "name": row.name} for row in holiday_rows],
     }
 
 @app.get("/api/attendance")
@@ -678,6 +865,9 @@ def correct_attendance(attendance_id: int, payload: AttendanceCorrection, db: Se
     row = db.query(Attendance).filter_by(id=attendance_id).first()
     if not row: raise HTTPException(404,"Attendance not found")
     changes = payload.model_dump(exclude_unset=True)
+    if "shift_id" in changes and changes["shift_id"] is not None:
+        if db.query(Shift.id).filter_by(id=changes["shift_id"]).first() is None:
+            raise HTTPException(404, "Shift not found")
     for key, value in changes.items():
         if key in {"check_in", "check_out"} and value is not None and value.tzinfo is not None:
             value = value.astimezone(timezone.utc).replace(tzinfo=None)
@@ -686,6 +876,14 @@ def correct_attendance(attendance_id: int, payload: AttendanceCorrection, db: Se
         raise HTTPException(422, "check_out must be at or after check_in")
     if row.check_in and row.check_out: row.working_minutes=max(0,int((row.check_out-row.check_in).total_seconds()//60))
     else: row.working_minutes = 0
+    shift = db.query(Shift).filter_by(id=row.shift_id).first() if row.shift_id else None
+    if row.check_in and row.check_out and "status" not in changes:
+        row.status = attendance_status_for_minutes(
+            row.working_minutes, shift.expected_minutes if shift else 8 * 60
+        )
+    row.late_minutes, row.early_checkout_minutes, row.overtime_minutes = attendance_shift_metrics(
+        shift, row.check_in, row.check_out
+    )
     audit(db,actor,"attendance.corrected","attendance",row.id,payload.reason)
     db.commit(); db.refresh(row); return attendance_dict(row, db.query(Employee).filter_by(id=row.employee_id).first())
 
@@ -721,13 +919,9 @@ def apply_leave(payload: LeaveApply, db: Session = Depends(get_db), employee: Em
     ).first()
     if overlapping:
         raise HTTPException(409, "This request overlaps an existing pending or approved leave")
-    holiday_dates = {
-        holiday_date
-        for (holiday_date,) in db.query(Holiday.holiday_date).filter(
-            Holiday.holiday_date >= payload.start_date,
-            Holiday.holiday_date <= payload.end_date,
-        ).all()
-    }
+    holiday_dates = applicable_holiday_dates(
+        db, payload.start_date, payload.end_date, employee.department_id
+    )
     days = Decimal(working_days_between(payload.start_date, payload.end_date, holiday_dates))
     if days == 0:
         raise HTTPException(422, "Leave dates must include at least one working day")
@@ -806,13 +1000,9 @@ def decide_leave(leave_id: int, payload: LeaveDecision, db: Session = Depends(ge
             year_end = date(year, 12, 31)
             period_start = max(row.start_date, year_start)
             period_end = min(row.end_date, year_end)
-            holidays = {
-                holiday_date
-                for (holiday_date,) in db.query(Holiday.holiday_date).filter(
-                    Holiday.holiday_date >= period_start,
-                    Holiday.holiday_date <= period_end,
-                ).all()
-            }
+            holidays = applicable_holiday_dates(
+                db, period_start, period_end, employee.department_id
+            )
             charged_days = Decimal(working_days_between(period_start, period_end, holidays))
             year_balance.remaining_days = max(Decimal("0"), year_balance.remaining_days - charged_days)
     row.review_note = payload.note
@@ -837,13 +1027,10 @@ def payroll_day_totals(db: Session, employee_id: int, year: int, month: int) -> 
     month_start = date(year, month, 1)
     month_end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
     year_start = date(year, 1, 1)
-    holidays = {
-        holiday_date
-        for (holiday_date,) in db.query(Holiday.holiday_date).filter(
-            Holiday.holiday_date >= year_start,
-            Holiday.holiday_date <= month_end,
-        ).all()
-    }
+    employee = db.query(Employee).filter_by(id=employee_id).first()
+    holidays = applicable_holiday_dates(
+        db, year_start, month_end, employee.department_id if employee else None
+    )
     work_dates: set[date] = set()
     current = year_start
     while current <= month_end:
@@ -922,21 +1109,75 @@ def generate_payroll(payload: PayrollGenerate, db: Session = Depends(get_db), ac
             continue
         working_days, payable_days = payroll_day_totals(db, employee.id, year, month)
         lop_days = working_days - payable_days
-        basic_salary = Decimal(employee.basic_salary)
-        hra = Decimal(employee.hra)
-        special_allowance = Decimal(employee.special_allowance)
-        gross = basic_salary + hra + special_allowance
+        period_start = date(year, month, 1)
+        base_compensation = db.query(EmployeeCompensation).filter(
+            EmployeeCompensation.employee_id == employee.id,
+            EmployeeCompensation.effective_from <= period_end,
+            (EmployeeCompensation.effective_to.is_(None))
+            | (EmployeeCompensation.effective_to >= period_start),
+        ).order_by(EmployeeCompensation.effective_from.desc()).first()
+        salary_source = base_compensation or employee
+        basic_salary = Decimal(salary_source.basic_salary)
+        hra = Decimal(salary_source.hra)
+        special_allowance = Decimal(salary_source.special_allowance)
+        base_earnings = {
+            "Basic salary": basic_salary,
+            "House rent allowance": hra,
+            "Special allowance": special_allowance,
+        }
+        base_earnings = {name: amount for name, amount in base_earnings.items() if amount}
+        custom_assignments = db.query(EmployeeSalaryComponent, SalaryComponent).join(
+            SalaryComponent, SalaryComponent.id == EmployeeSalaryComponent.component_id
+        ).filter(
+            EmployeeSalaryComponent.employee_id == employee.id,
+            EmployeeSalaryComponent.effective_from <= period_end,
+            (EmployeeSalaryComponent.effective_to.is_(None))
+            | (EmployeeSalaryComponent.effective_to >= date(year, month, 1)),
+            SalaryComponent.is_active.is_(True),
+        ).all()
+        custom_earnings: dict[str, Decimal] = {}
+        custom_deductions: dict[str, Decimal] = {}
+        for assignment, component in custom_assignments:
+            amount = Decimal(assignment.monthly_amount)
+            target = custom_earnings if component.component_type == "earning" else custom_deductions
+            target[component.name] = target.get(component.name, Decimal("0")) + amount
+        attendance_month_start = period_start
+        attendance_month_end = date(year + (month == 12), month % 12 + 1, 1)
+        overtime_minutes = db.query(func.coalesce(func.sum(Attendance.overtime_minutes), 0)).filter(
+            Attendance.employee_id == employee.id,
+            Attendance.work_date >= attendance_month_start,
+            Attendance.work_date < attendance_month_end,
+        ).scalar() or 0
+        overtime_rate = (
+            basic_salary / (Decimal(max(working_days, 1)) * Decimal(480))
+        )
+        overtime_pay = (overtime_rate * Decimal(overtime_minutes) * Decimal("1.5")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        earnings_breakdown = {**base_earnings, **custom_earnings}
+        if overtime_pay:
+            earnings_breakdown["Overtime pay"] = overtime_pay
+        gross = sum(earnings_breakdown.values(), Decimal("0"))
         per_day = (
-            (gross / working_days).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            ((gross - overtime_pay) / working_days).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             if working_days
             else Decimal("0")
         )
-        lop_deduction = min(gross, (per_day * lop_days).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
-        pf_percentage = Decimal(employee.pf_percentage)
+        lop_deduction = min(
+            gross,
+            (per_day * lop_days).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        )
+        pf_percentage = Decimal(salary_source.pf_percentage)
         pf_deduction = (basic_salary * pf_percentage / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        professional_tax = Decimal(employee.professional_tax)
-        tds_deduction = Decimal(employee.tds)
-        other_deductions = pf_deduction + professional_tax + tds_deduction
+        professional_tax = Decimal(salary_source.professional_tax)
+        tds_deduction = Decimal(salary_source.tds)
+        deductions_breakdown = {
+            "Provident fund": pf_deduction,
+            "Professional tax": professional_tax,
+            "TDS": tds_deduction,
+            **custom_deductions,
+        }
+        other_deductions = sum(deductions_breakdown.values(), Decimal("0"))
         net = max(Decimal("0"), gross - lop_deduction - other_deductions)
         payroll=Payroll(
             employee_id=employee.id,year=year,month=month,gross_salary=gross,
@@ -946,6 +1187,9 @@ def generate_payroll(payload: PayrollGenerate, db: Session = Depends(get_db), ac
             working_days=working_days,payable_days=payable_days,
             lop_days=lop_days,lop_deduction=lop_deduction,
             other_deductions=other_deductions,net_salary=net,locked=True,
+            overtime_minutes=overtime_minutes,overtime_pay=overtime_pay,
+            earnings_breakdown={name: str(amount) for name, amount in earnings_breakdown.items()},
+            deductions_breakdown={name: str(amount) for name, amount in deductions_breakdown.items()},
         )
         db.add(payroll)
         db.flush()
@@ -989,6 +1233,10 @@ def payroll_dict(p, employee=None):
         "lop_days": str(p.lop_days),
         "lop_deduction": str(p.lop_deduction),
         "other_deductions": str(p.other_deductions),
+        "overtime_minutes": p.overtime_minutes,
+        "overtime_pay": str(p.overtime_pay),
+        "earnings_breakdown": p.earnings_breakdown or {},
+        "deductions_breakdown": p.deductions_breakdown or {},
         "net_salary": str(p.net_salary),
         "credit_reference": p.credit_reference,
         "manual_adjustment_total": str(sum((adjustment.amount for adjustment in adjustments), Decimal("0"))),
@@ -1008,11 +1256,12 @@ def payroll_dict(p, employee=None):
     }
 
 @app.get("/api/payroll")
-def all_payroll(year: int | None = None, month: int | None = None, department_id: int | None = None, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin","hr"))):
+def all_payroll(year: int | None = None, month: int | None = None, department_id: int | None = None, employee_id: int | None = None, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin","hr"))):
     q=db.query(Payroll, Employee).options(selectinload(Payroll.adjustments)).join(Employee, Employee.id == Payroll.employee_id)
     if year is not None: q=q.filter(Payroll.year==year)
     if month is not None: q=q.filter(Payroll.month==month)
     if department_id is not None: q=q.filter(Employee.department_id==department_id)
+    if employee_id is not None: q=q.filter(Employee.id == employee_id)
     return [payroll_dict(payroll, employee) for payroll, employee in q.order_by(Payroll.year.desc(),Payroll.month.desc(),Employee.full_name).all()]
 
 @app.post("/api/payroll/{payroll_id}/adjustments")
@@ -1317,3 +1566,5 @@ def audit_logs(
 def notification_logs(limit: int = Query(100,ge=1,le=500), db: Session = Depends(get_db), actor: User = Depends(require_roles("admin","hr"))):
     rows=db.query(NotificationLog).order_by(NotificationLog.created_at.desc()).limit(limit).all()
     return [{"id":r.id,"recipient":r.recipient,"event_type":r.event_type,"subject":r.subject,"status":r.status,"created_at":r.created_at} for r in rows]
+
+app.include_router(phase_two_router, prefix="/api")
